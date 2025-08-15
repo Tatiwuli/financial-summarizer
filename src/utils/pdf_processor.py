@@ -1,0 +1,309 @@
+"""
+PDF Processor module for Earnings Call Analyzer
+Handles PDF validation, text extraction, and Q&A section identification
+"""
+
+import os
+import re
+import uuid
+import shutil
+from pathlib import Path
+from typing import Optional, Tuple, Dict, List
+from statistics import mode, StatisticsError
+import fitz  # PyMuPDF
+
+
+class PDFProcessingError(Exception):
+    """Custom exception for PDF processing errors"""
+    pass
+
+
+class PDFProcessor:
+    """Handles PDF processing operations for earnings call transcripts"""
+
+    def __init__(self, max_file_size_mb: int = 10, transcripts_dir: str = "transcripts"):
+
+        self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
+        self.transcripts_dir = Path(transcripts_dir)
+        self.transcripts_dir.mkdir(exist_ok=True)
+        self.qa_patterns = [
+            "Questions and Answers", "Question and Answer",
+            "QUESTIONS AND ANSWERS", "QUESTION AND ANSWER"
+        ]
+
+# ------------------ FUNCTIONS UTILITIES ------------------------------------------------
+
+    def normalize_file_path(self, file_path: str) -> Path:
+
+        try:
+            # Convert to Path object and resolve to absolute path
+            path = Path(file_path).resolve()
+
+            # Check if file exists
+            if not path.exists():
+                raise PDFProcessingError(f"File not found: {file_path}")
+
+            # Check if it's a file (not a directory)
+            if not path.is_file():
+                raise PDFProcessingError(f"Path is not a file: {file_path}")
+
+            # Check if it's a PDF file
+            if path.suffix.lower() != '.pdf':
+                raise PDFProcessingError(f"File is not a PDF: {file_path}")
+
+            return path
+
+        except OSError as e:
+            raise PDFProcessingError(
+                f"Invalid file path: {file_path} - {str(e)}")
+
+    def save_transcript_copy(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
+
+        # Generate UUID filename
+        file_uuid = str(uuid.uuid4())
+        uuid_filename = f"{file_uuid}.pdf"
+        try:
+            transcript_path = self.transcripts_dir / uuid_filename
+            # Copy file to transcripts directory with UUID name
+            shutil.copy2(source_path, transcript_path)
+            return uuid_filename, str(transcript_path)
+        except Exception as e:
+            raise PDFProcessingError(
+                f"Failed to save transcript copy: {str(e)}")
+
+    def validate_file_size(self, file_path: Path) -> None:
+
+        file_size = file_path.stat().st_size
+        if file_size > self.max_file_size_bytes:
+            size_mb = file_size / (1024 * 1024)
+            max_mb = self.max_file_size_bytes / (1024 * 1024)
+            raise PDFProcessingError(
+                f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
+            )
+
+    def analyze_font_styles(self, file_path: Path) -> float:
+
+        try:
+            doc = fitz.open(str(file_path))
+            font_sizes = []
+
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                blocks = page.get_text("dict")["blocks"]
+
+                for block in blocks:
+                    if "lines" in block:
+                        for line in block["lines"]:
+                            for span in line["spans"]:
+                                font_size = span["size"]
+                                if font_size > 0:  # Filter out invalid sizes
+                                    font_sizes.append(round(font_size, 1))
+
+            doc.close()
+
+            if not font_sizes:
+                raise PDFProcessingError(
+                    "No valid font sizes found in document")
+
+            # Calculate mode (most common font size)
+            try:
+                body_font_size = mode(font_sizes)
+            except StatisticsError:
+                # If no mode exists, use median
+                font_sizes.sort()
+                body_font_size = font_sizes[len(font_sizes) // 2]
+
+            return body_font_size
+
+        except Exception as e:
+            raise PDFProcessingError(
+                f"Failed to analyze font styles: {str(e)}")
+
+    def find_qa_section_title(self, file_path: Path, body_font_size: float) -> Optional[int]:
+
+        try:
+            doc = fitz.open(str(file_path))
+            self.qa_patterns = [
+                "Questions and Answers",
+                "Question and Answer",
+                "QUESTIONS AND ANSWERS",
+                "QUESTION AND ANSWER"
+            ]
+
+            min_title_font_size = body_font_size * 1.2
+
+            # Search from the last page to the first to avoid table of contents
+            for page_num in range(len(doc) - 1, -1, -1):
+                page = doc.load_page(page_num)
+                blocks = page.get_text("dict")["blocks"]
+
+                for block in blocks:
+                    if "lines" in block:
+                        for line in block["lines"]:
+                            line_text = ""
+                            line_font_sizes = []
+
+                            for span in line["spans"]:
+                                line_text += span["text"]
+                                line_font_sizes.append(span["size"])
+
+                            line_text = line_text.strip()
+
+                            # Check if line matches Q&A patterns
+                            for pattern in self.qa_patterns:
+                                if pattern in line_text:
+                                    # Check if font size is larger than body text
+                                    if line_font_sizes and max(line_font_sizes) >= min_title_font_size:
+                                        doc.close()
+                                        return page_num
+
+            doc.close()
+            return None
+
+        except Exception as e:
+            raise PDFProcessingError(f"Failed to find Q&A section: {str(e)}")
+
+    def extract_text_sections(self, file_path: Path) -> Tuple[str, str]:
+
+        try:
+            body_font_size = self.analyze_font_styles(file_path)
+            qa_start_page = self.find_qa_section_title(
+                file_path, body_font_size)
+
+            doc = fitz.open(str(file_path))
+            presentation_transcript = ""
+            q_a_transcript = ""
+
+            # If no Q&A section is found, the whole document is the presentation.
+            if qa_start_page is None:
+                for page_num in range(len(doc)):
+                    presentation_transcript += doc.load_page(
+                        page_num).get_text()
+            else:
+                # 1. Extract text from pages before the Q&A section
+                for page_num in range(qa_start_page):
+                    presentation_transcript += doc.load_page(
+                        page_num).get_text()
+
+                # 2. Split the page where the Q&A section starts
+                page = doc.load_page(qa_start_page)
+                page_text = page.get_text()
+
+                qa_start_index = -1
+                for pattern in self.qa_patterns:
+                    found_index = page_text.find(pattern)
+                    if found_index != -1:
+                        if qa_start_index == -1 or found_index < qa_start_index:
+                            qa_start_index = found_index
+
+                if qa_start_index != -1:
+                    presentation_transcript += page_text[:qa_start_index]
+                    q_a_transcript += page_text[qa_start_index:]
+                else:
+                    # Fallback if pattern not found on page (should not happen)
+                    presentation_transcript += page_text
+
+                # 3. Extract text from the rest of the pages for the Q&A section
+                for page_num in range(qa_start_page + 1, len(doc)):
+                    q_a_transcript += doc.load_page(page_num).get_text()
+
+            # 4. Clean up and remove potential copyright page from the end
+            if len(doc) > 1:
+                last_page = doc.load_page(len(doc) - 1)
+                last_page_text = last_page.get_text().strip()
+
+                if last_page_text:
+                    last_page_font_sizes = []
+                    blocks = last_page.get_text("dict")["blocks"]
+                    for block in blocks:
+                        if "lines" in block:
+                            for line in block["lines"]:
+                                for span in line["spans"]:
+                                    last_page_font_sizes.append(
+                                        round(span["size"], 1))
+
+                    if last_page_font_sizes and max(last_page_font_sizes) < body_font_size:
+                        # Decide which text block to trim the copyright from
+                        if q_a_transcript and q_a_transcript.strip().endswith(last_page_text):
+                            q_a_transcript = q_a_transcript.strip(
+                            )[:-len(last_page_text)].strip()
+                        elif presentation_transcript.strip().endswith(last_page_text):
+                            presentation_transcript = presentation_transcript.strip()[
+                                :-len(last_page_text)].strip()
+
+            doc.close()
+            return presentation_transcript.strip(), q_a_transcript.strip()
+
+        except Exception as e:
+            raise PDFProcessingError(
+                f"Failed to extract text sections: {str(e)}")
+
+    def validate_content(self, text: str, min_alphabetic_chars: int = 250) -> None:
+
+        if not text or not text.strip():
+            raise PDFProcessingError("Extracted content is empty")
+
+        # Count alphabetic characters only
+        alphabetic_chars = re.sub(r'[^a-zA-Z]', '', text)
+        alphabetic_count = len(alphabetic_chars)
+
+        if alphabetic_count < min_alphabetic_chars:
+            raise PDFProcessingError(
+                f"Insufficient content in {text}: {alphabetic_count} alphabetic characters "
+                f"(minimum required: {min_alphabetic_chars})"
+            )
+
+    # ------------------ FUNCTIONS WORKFLOWS ------------------------------------------------
+
+    def process_pdf(self, file_path: str) -> Dict:
+        """
+        Main function to extract text sections from pdf 
+        """
+
+        print("Processing PDF starts...")
+        print("Normalizing file path: ", file_path)
+        # Normalize and validate file path
+        normalized_path = self.normalize_file_path(file_path)
+        original_filename = normalized_path.name
+
+        # Validate file size ( 10mb)
+        print("Validating file size...")
+        self.validate_file_size(normalized_path)
+
+        print("Extracting text sections...")
+        #  Extract both text sections
+        presentation_transcript, q_a_transcript = self.extract_text_sections(
+            normalized_path)
+
+        print("Validating content...")
+        #  Validate content
+        self.validate_content(presentation_transcript)
+        if q_a_transcript:  # Only validate Q&A if it exists
+            self.validate_content(q_a_transcript)
+
+        print("Saving transcript copy...")
+        #  Save transcript copy with UUID filename
+        uuid_filename, transcript_path = self.save_transcript_copy(
+            normalized_path, original_filename
+        )
+
+        return {
+            "presentation_transcript": presentation_transcript,
+            "presentation_text_length": len(presentation_transcript),
+            "q_a_transcript": q_a_transcript,
+            "qa_text_length": len(q_a_transcript),
+            "original_filename": original_filename,
+            "uuid_filename": uuid_filename,
+            "transcript_path": transcript_path
+        }
+
+
+def create_pdf_processor(max_file_size_mb: int = 10, transcripts_dir: str = "transcripts") -> PDFProcessor:
+    """
+    Main function to  create the pdf processor's instance
+    """
+
+    return PDFProcessor(max_file_size_mb, transcripts_dir)
+
+
+# pdf_processor = create_pdf_processor()
