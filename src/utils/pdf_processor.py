@@ -167,8 +167,11 @@ class PDFProcessor:
 
         try:
             body_font_size = self.analyze_font_styles(file_path)
+            print(f"[DEBUG EXTRACT] Body font size: {body_font_size}")
+
             qa_start_page = self.find_qa_section_title(
                 file_path, body_font_size)
+            print(f"[DEBUG EXTRACT] Q&A start page: {qa_start_page}")
 
             doc = fitz.open(str(file_path))
             presentation_transcript = ""
@@ -176,10 +179,14 @@ class PDFProcessor:
 
             # If no Q&A section is found, the whole document is the presentation.
             if qa_start_page is None:
+                print(
+                    "[DEBUG EXTRACT] No Q&A section found - treating entire document as presentation")
                 for page_num in range(len(doc)):
                     presentation_transcript += doc.load_page(
                         page_num).get_text()
             else:
+                print(
+                    f"[DEBUG EXTRACT] Q&A section found starting at page {qa_start_page}")
                 # 1. Extract text from pages before the Q&A section
                 for page_num in range(qa_start_page):
                     presentation_transcript += doc.load_page(
@@ -286,6 +293,24 @@ class PDFProcessor:
         uuid_filename, transcript_path = self.save_transcript_copy(
             normalized_path, original_filename
         )
+
+        # DEBUG: Log extracted content details
+        print(
+            f"[DEBUG PDF_PROCESSOR] Processing complete for: {original_filename}")
+        print(
+            f"[DEBUG PDF_PROCESSOR] Presentation length: {len(presentation_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A length: {len(q_a_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A exists: {bool(q_a_transcript)}")
+
+        if presentation_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Presentation preview: {presentation_transcript[:200]}...")
+
+        if q_a_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Q&A preview: {q_a_transcript[:200]}...")
+        else:
+            print("[DEBUG PDF_PROCESSOR] Q&A transcript is EMPTY!")
 
         return {
             "presentation_transcript": presentation_transcript,

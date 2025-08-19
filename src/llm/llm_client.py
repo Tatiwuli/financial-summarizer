@@ -1,15 +1,9 @@
 from pydantic import BaseModel
 
-
-"""
-LLM Client Abstraction for Earnings Call Analyzer
-Implements a provider-agnostic interface to communicate with different LLM APIs.
-"""
-
 import os
 from abc import ABC, abstractmethod
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Type, Any
 
 import google.generativeai as genai
 from google.generativeai import types
@@ -25,6 +19,11 @@ class LLMResponse(BaseModel):
     input_tokens: int
     output_tokens: int
     finish_reason: Optional[str] = None
+    parsed: Optional[BaseModel] = None
+    raw: Optional[Any] = None
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class BaseLLMClient(ABC):
@@ -38,7 +37,8 @@ class BaseLLMClient(ABC):
         self,
         system_prompt: str,
         user_prompt: str,
-        max_output_tokens: int
+        max_output_tokens: int,
+        **kwargs #specific parameters for each model
     ) -> LLMResponse:
         """Generates a response from the LLM."""
         pass
@@ -59,7 +59,7 @@ class GeminiClient(BaseLLMClient):
         genai.configure(api_key=api_key)
         self.client = genai.GenerativeModel(model_name=self.model)
 
-    def generate(self, system_prompt, user_prompt, max_output_tokens) -> LLMResponse:
+    def generate(self, system_prompt, user_prompt, max_output_tokens, **kwargs) -> LLMResponse:
 
         try:
             response = self.client.generate_content(
@@ -98,59 +98,79 @@ class OpenAIClient(BaseLLMClient):
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=api_key)
 
-    def generate(self, system_prompt, user_prompt, max_output_tokens) -> LLMResponse:
+    def generate(self, system_prompt:str, user_prompt:str, max_output_tokens: int,
+                  effort_level: Optional[str] = "medium",
+                    text_format: Optional[Type[BaseModel]] = None) -> LLMResponse:
+        
+
+        base= {
+            "model": self.model,
+            "instructions": system_prompt,
+            "input": user_prompt,
+            "max_output_tokens": max_output_tokens,
+
+        }
+        if effort_level and self.model == "gpt-5":
+            base["reasoning"] = {"effort": effort_level}
+
         try:
 
-            response = self.client.responses.create(
-                model=self.model,
-                instructions=system_prompt,
-                input=user_prompt,
-
-                max_output_tokens=max_output_tokens
-            )
-
-            output_text = ""
-            try:
-                output_items = getattr(response, "output", None) or []
-                for item in output_items:
-                    parts = getattr(item, "content", None) or []
-                    for part in parts:
-                        if hasattr(part, "text") and part.text:
-                            output_text += part.text
-            except Exception:
-                # Best-effort fallback to string
-                output_text = str(getattr(response, "output", ""))
-
-            print("#####################OUTPUT###############", output_text)
-
-            # Usage (may be missing depending on model/tooling)
-            usage = getattr(response, "usage", None)
-            in_tok = getattr(usage, "input_tokens", None) if usage else None
-            out_tok = getattr(usage, "output_tokens", None) if usage else None
-
-            # Finish / status
-            status = getattr(response, "status", None) or "unknown"
-
-            if not output_text:
-                raise LLMClientError(
-                    f"Empty output from Responses API (status={status}). Raw: {response}"
+            if text_format is not None:
+                response = self.client.responses.parse(
+                    **base, 
+                    text_format=text_format,
                 )
+                parsed_resp = getattr(response, "output_parsed", None)
+                text_output = parsed_resp.json() if parsed_resp is not None else ""
 
-            print(f"[OpenAI] completed model={self.model} status={status} ")
-            print(f"output_chars={len(output_text)}")
+            else:
+                response = self.client.responses.create(**base)
+                text_output = getattr(response, "output_text", None)
 
-            return LLMResponse(
-                text=output_text,
-                model=self.model,
-                input_tokens=in_tok or 0,
-                output_tokens=out_tok or 0,
-                finish_reason=status,
-            )
+            if text_output is None:
+                print(
+                    "output_text attribute is not provided by the SDK. Aggregating the output text manually")
+                # fallback
+                text_output = ""
+                for item in getattr(response, "output", []) or []:
+                    for part in getattr(item, "content", []) or []:
+                        if getattr(part, "type", None) == "output_text" and getattr(part, "text", None):
+                            text_output += part.text
 
-        except Exception as e:
 
-            print(f"[OpenAI] API error: {e}")
-            raise LLMClientError(f"OpenAI API error: {e}")
+                
+            if not text_output and text_format is None:
+                raise LLMClientError(
+                    f"Empty output from Responses API (status={status}). Raw: {response}")
+
+        except Exception as e :
+                raise LLMClientError(f"OpenAI API error: {e}")
+            
+
+        # Usage (may be missing depending on model/tooling)
+        usage = getattr(response, "usage", None)
+        in_tok = getattr(usage, "input_tokens", None) if usage else None
+        out_tok = getattr(usage, "output_tokens", None) if usage else None
+
+        # Finish / status
+        status = getattr(response, "status", None) or "unknown"
+
+
+
+        print(f"[OpenAI] completed model={self.model} status={status} ")
+        print(f"output_chars={len(text_output)}")
+        print("#####################OUTPUT###############", text_output)
+
+        return LLMResponse(
+            text=text_output,
+            model=self.model,
+            input_tokens=in_tok or 0,
+            output_tokens=out_tok or 0,
+            finish_reason=status,
+            parsed = parsed_resp if text_format is not None else None,
+            raw = response
+        )
+
 
 
 def get_llm_client(model: str) -> BaseLLMClient:

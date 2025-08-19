@@ -1,10 +1,10 @@
 import json
-from typing import Any, Dict
-from src.llm.llm_response_processor import LlmSummaryValidationError, map_short_q_a, map_long_q_a, map_judge, map_overview
+from typing import Any, Dict, Optional, Type
 from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, write_call_overview
 from src.services.precheck import run_precheck
 from src.config.runtime import CALL_TYPE, SUMMARY_LENGTH, SHORT_Q_A_PROMPT_VERSION, LONG_Q_A_PROMPT_VERSION
-from datetime import datetime
+from fastapi import UploadFile 
+from pydantic import ValidationError
 
 
 class SummaryWorkflowError(Exception):
@@ -14,134 +14,142 @@ class SummaryWorkflowError(Exception):
         self.message = message
 
 
-def _ensure_dict(text_or_dict: Any) -> Dict[str, Any]:
-    """Aceita string JSON ou dict; retorna dict ou levanta erro."""
-    if isinstance(text_or_dict, dict):
-        return text_or_dict
-    if isinstance(text_or_dict, str):
-        s = text_or_dict.strip()
-        # remove cerquilha de bloco de código se vier
-        if s.startswith("```"):
-            s = s.strip("`")
-            if s.lower().startswith("json"):
-                s = s[4:].strip()
-        return json.loads(s)
-    # não aceitamos outros tipos
-    raise SummaryWorkflowError(
-        "llm_invalid_json", "Saída do LLM não é JSON válido.")
-
-
-def run_summary_workflow():
+def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
 
     blocks = []
+    all_metadata = {}
+    validated_overview = None  # Variable scope
 
-    # Check pdf processor
-    precheck_result = run_precheck()
+    # Validate PDF
 
-    precheck_block = precheck_result.get("blocks")[0]
+    precheck_result = run_precheck(file=file)
+    blocks_list = precheck_result.get("blocks", [])
+    if not blocks_list:
+        raise SummaryWorkflowError(
+            "precheck_error", "No blocks returned from precheck")
 
-    q_a_transcript = precheck_block.get("data").get("qa_transcript")
-    presentation_transcript = precheck_block.get(
-        "data").get("presentation_transcript")
+    #if blocks exist 
+    precheck_block = blocks_list[0]
+    data = precheck_block.get("data", {})
+    qa_transcript = data.get("qa_transcript")
+    presentation_transcript = data.get("presentation_transcript")
 
-    call_type = CALL_TYPE
-    summary_length = SUMMARY_LENGTH
+    if not qa_transcript:
+    
+        raise SummaryWorkflowError("precheck_error", f"No Q&A transcript found")
+
+
 
     if summary_length == "short":
         prompt_version = SHORT_Q_A_PROMPT_VERSION
     else:
         prompt_version = LONG_Q_A_PROMPT_VERSION
 
-    # erros dos outputs ja sao tratados no llm client
-
+    
     try:
         qa_resp = summarize_q_a(
-            q_a_transcript=q_a_transcript,
+            qa_transcript=qa_transcript,
             call_type=call_type,
             summary_length=summary_length,  # do config
             prompt_version=prompt_version
         )
         # Texto (string JSON) retornado pelo LLM
-        qa_summary_raw = qa_resp.get("summary")
+        summary_metadata = qa_resp.get("metadata", {})
+        qa_summary_obj = qa_resp.get("summary", {}).get("obj")
+        qa_summary_text = qa_resp.get("summary", {}).get("text", "Empty summary")
+        if not qa_summary_obj:
+            raise ValidationError(
+                "LLM did not return a parsed Pydantic object for Summary Q&A")
 
-        qa_summary_metadata = qa_resp.get("metadata", {})
+        # if valid :
+        block_type = "q_a_short" if summary_length == "short" else "q_a_long"
+        blocks.append(
+            {
+                "type": block_type,
+                "data": qa_summary_obj.model_dump()
+            }
+        )
 
-        # valida output de json
-        qa_summary_json = _ensure_dict(qa_summary_raw)
-        
-        # mapa para o bloco
-        if summary_length == "short":
-            blocks.append(map_short_q_a(qa_summary_json))
+        all_metadata["summary_metadata"] = all_metadata.get(
+            "summary_metadata", {})
+        all_metadata["summary_metadata"].update(summary_metadata)
 
-        else:
-            blocks.append(map_long_q_a(qa_summary_json))
-
-    except LlmSummaryValidationError as e:
+    except ValidationError as e:
         raise SummaryWorkflowError("llm_invalid_json", str(e))
-    except json.JSONDecodeError as e:
-        raise SummaryWorkflowError(
-            "llm_invalid_json", f"JSON inválido do LLM (Q&A): {e}")
     except Exception as e:
-        # erro técnico (client, rate limit, etc.)
         raise SummaryWorkflowError(
-            "llm_summary_error", f"Falha ao gerar Q&A: {e}")
+            "llm_summary_error", str(e))  # broader exception
 
     # 3) JUDGE (obrigatório e sempre após Q&A)
 
     try:
         judge_resp = judge_q_a_summary(
-            transcript=q_a_transcript,
-            q_a_summary=qa_summary_raw,        # passe o MESMO texto que o summarize gerou
-            summary_structure=qa_summary_metadata.get("summary_structure")
+            transcript=qa_transcript,
+            q_a_summary=qa_summary_text,    # passe o MESMO texto que o summarize gerou
+            summary_structure=summary_metadata.get("summary_structure")
         )
-        judge_text_raw = judge_resp.get("eval_results")
 
-        judge_result_json = _ensure_dict(judge_text_raw)
+        # Convert the Pydantic model to dict format expected by map_judge
+        # Transform list-based evaluation_results to dict-based format
+        judge_summary_obj = judge_resp.get("eval_results", {}).get("obj")
+        judge_summary_metadata = judge_resp.get("metadata", {})
+        if not judge_summary_obj:
+            raise ValidationError(
+                "LLM did not return a parsed Pydantic object for Judge")
 
-        blocks.append(map_judge(judge_result_json))
-        
+        blocks.append(
+            {
+                "type": "judge",
+                "data": judge_summary_obj.model_dump()
+            }
+        )
 
-    except LlmSummaryValidationError as e:
-        raise SummaryWorkflowError("llm_invalid_json", f"Judge inválido: {e}")
-    except json.JSONDecodeError as e:
-        raise SummaryWorkflowError(
-            "llm_invalid_json", f"JSON inválido do LLM (Judge): {e}")
+        all_metadata["judge_metadata"] = all_metadata.get("judge_metadata", {})
+        all_metadata["judge_metadata"].update(judge_summary_metadata)
+
+    except ValidationError as e:
+        raise SummaryWorkflowError("llm_invalid_json", str(e))
     except Exception as e:
-        raise SummaryWorkflowError(
-            "llm_judge_error", f"Falha ao avaliar Q&A: {e}")
+        raise SummaryWorkflowError("llm_judge_error", str(e))
 
     # 4) OVERVIEW (obrigatório)
-
-  #  write_call_overview(presentation_transcript: str, q_a_summary: str, call_type: str, prompt_version=OVERVIEW_PROMPT_VERSION, model="gpt-5-mini")
     try:
         ov_resp = write_call_overview(
             # teu util já trata vazio com string custom
             presentation_transcript=presentation_transcript or "The call didn't have a presentation section. Refer to the Q&A summary instead",
-            q_a_summary=qa_summary_raw,
+            q_a_summary=qa_summary_text,
             call_type=call_type
         )
-        ov_text_raw = ov_resp.get("overview")
 
-        ov_json = _ensure_dict(ov_text_raw)
+        ov_obj = ov_resp.get("overview", {}).get("obj")
 
-        blocks.append(map_overview(ov_json))
-    except LlmSummaryValidationError as e:
-        # overview é obrigatório → paramos
-        raise SummaryWorkflowError(
-            "llm_invalid_json", f"Overview inválido: {e}")
-    except json.JSONDecodeError as e:
-        raise SummaryWorkflowError(
-            "llm_invalid_json", f"JSON inválido do LLM (Overview): {e}")
+        ov_metadata = ov_resp.get("metadata", {})
+        if not ov_obj:
+            raise ValidationError(
+                "LLM did not return a parsed Pydantic object for Overview ")
+
+        validated_overview = ov_obj
+
+        blocks.append(
+            {
+                "type": "overview",
+                "data": validated_overview.model_dump()
+            }
+        )
+
+        all_metadata["overview_metadata"] = all_metadata.get(
+            "overview_metadata", {})
+        all_metadata["overview_metadata"].update(ov_metadata)
+
+    except ValidationError as e:
+        raise SummaryWorkflowError("llm_invalid_json", str(e))
+
     except Exception as e:
-        raise SummaryWorkflowError(
-            "llm_overview_error", f"Falha ao gerar overview: {e}")
+        raise SummaryWorkflowError("llm_overview_error", str(e))
 
-    meta = precheck_result.get("meta", {}).copy()
-
-    meta["generated_at"] = datetime.utcnow().isoformat()
     return {
-        "title": ov_json["title"],
+        "title": validated_overview.title if validated_overview else "Untitled",
         "call_type": call_type,
-        "blocks": blocks,   # ordem: q_a_* → judge → overview
-        "meta": meta
+        "blocks": blocks,   # ordem: q_a_* → judge → overvie
+        "meta": all_metadata
     }

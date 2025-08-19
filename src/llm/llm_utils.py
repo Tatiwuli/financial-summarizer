@@ -2,22 +2,93 @@
 
 import json
 import os
-from llm_client import get_llm_client
+from src.llm.llm_client import get_llm_client
 from typing import Tuple
-from src.config.runtime import LONG_Q_A_PROMPT_VERSION, JUDGE_PROMPT_VERSION, OVERVIEW_PROMPT_VERSION
+from src.config.runtime import LONG_Q_A_PROMPT_VERSION, JUDGE_PROMPT_VERSION, OVERVIEW_PROMPT_VERSION, EFFORT_LEVEL_Q_A, EFFORT_LEVEL_JUDGE
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
 
 # Load JSON prompt files
 
+
 class PromptConfigError(Exception):
     pass
+
+
 class LLMGenerationError(Exception):
     pass
 
+
+# SUMMARIZE OUTPUT FORMAT
+class Question(BaseModel):
+    question: str
+    answer_summary: str
+
+class Analyst(BaseModel):
+    name: str
+    firm: str
+    questions: List[Question]
+
+
+
+
+class SummarizeOutputFormat(BaseModel):
+    title: str
+    analysts: List[Analyst]
+
+
+
+# JUDGE OUTPUT FORMAT - Complete schemas for q_a_summary.json output structure
+
+
+class Error(BaseModel):
+    error: str
+    summary_text: str
+    transcript_text: str
+
+
+class EvaluationResult(BaseModel):
+    metric_name: str
+    passed: bool
+    errors: List[Error]
+
+
+class OverallAssessment(BaseModel):
+    total_criteria: int
+    passed_criteria: int
+    failed_criteria: int
+    overall_passed: bool
+    pass_rate: float
+    evaluation_timestamp: str
+    evaluation_summary: str
+
+
+class JudgeOutputFormat(BaseModel):
+    evaluation_results: List[EvaluationResult]
+    overall_assessment: OverallAssessment
+
+
+# Overall output format
+class Executive(BaseModel):
+    executive_name: str
+    role: str
+
+
+class OverviewOutputFormat(BaseModel):
+    title: str
+    executives_list: List[Executive]
+    overview: str
+
+
+
+
+
+
 def load_prompts_summarize():
-   
+
     config_dir = os.path.join(os.path.dirname(
         os.path.dirname(__file__)), 'config', 'prompts_summarize')
-
 
     with open(os.path.join(config_dir, 'short_q_a.json'), 'r') as f:
         short_q_a_prompt = json.load(f)
@@ -45,7 +116,7 @@ short_q_a_prompt, long_q_a_prompt, overview_prompt = load_prompts_summarize()
 q_a_summary_prompt = load_prompts_judge()
 
 
-def summarize_q_a(q_a_transcript: str, call_type: str, summary_length: str, prompt_version:str, model ="gpt-5") -> dict:
+def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_Q_A, text_format=SummarizeOutputFormat) -> dict:
 
     print("Calling Summarize Q&A")
     llm_client = get_llm_client(model)
@@ -69,19 +140,25 @@ def summarize_q_a(q_a_transcript: str, call_type: str, summary_length: str, prom
         max_output_tokens = long_q_a_prompts.get(
             "parameters").get("max_output_tokens")
 
-    processed_user_prompt = user_prompt.format(TRANSCRIPT=q_a_transcript)
+    processed_user_prompt = user_prompt.format(TRANSCRIPT=qa_transcript)
     processed_system_prompt = system_prompt.format(
         OUTPUT_STRUCTURE=output_structure, CALL_TYPE=call_type)
 
-    #error de output eh feito ja no llm client
+    # error de output eh feito ja no llm client
     llm_response = llm_client.generate(
 
         system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
-        max_output_tokens=max_output_tokens
+        max_output_tokens=max_output_tokens,
+        effort_level=effort_level,
+        text_format=text_format
     )
 
+    summary_text = llm_response.text # to pass to jduge llm
+    summary_obj = llm_response.parsed
+
     metadata = {
+
         "model": model,
         "summary_length": summary_length,
         "prompt_version": prompt_version,
@@ -90,25 +167,27 @@ def summarize_q_a(q_a_transcript: str, call_type: str, summary_length: str, prom
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
         "finish_reason": llm_response.finish_reason,
+        "raw_response": llm_response.raw, #for debugging 
     }
 
-    summary = llm_response.text
 
     final_output = {
-        "summary": summary,
+        "summary": {"text": summary_text, "obj": summary_obj},
         "metadata": metadata
     }
 
     print(f"-------------Q&A SUMMARY FOR {call_type}-------------")
-    print(metadata)
-    print(f"---------------------------SUMMARY--------------------------------")
-    print(summary)
-    print(f"---------------------------SUMMARY--------------------------------")
+    print("Finish reason: ", llm_response.finish_reason)
+    print("Raw response: ", llm_response.raw)
+    print("----------------------------------------------------------------------")
+    print(f"--------------------------- START OF SUMMARY--------------------------------")
+    print(summary_text)
+    print(f"--------------------------- END OF SUMMARY--------------------------------")
 
     return final_output
 
 
-def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str, prompt_version = JUDGE_PROMPT_VERSION, model="gpt-5") -> dict:
+def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str, prompt_version=JUDGE_PROMPT_VERSION, model="gpt-5", effort_level=EFFORT_LEVEL_JUDGE, text_format=JudgeOutputFormat) -> dict:
 
     print("Calling Judge Q&A Summary")
     llm_client = get_llm_client(model)
@@ -131,7 +210,9 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
     llm_response = llm_client.generate(
         system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
-        max_output_tokens=max_output_tokens
+        max_output_tokens=max_output_tokens,
+        effort_level=effort_level,
+        text_format=text_format
     )
 
     metadata = {
@@ -140,25 +221,33 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
         "finish_reason": llm_response.finish_reason,
+        "raw_response": llm_response.raw, #for debugging 
     }
 
-    eval_results = llm_response.text
+    eval_results_obj = llm_response.parsed
+    eval_results_text = llm_response.text
 
     final_output = {
-        "eval_results": eval_results,
+        "eval_results": {"text": eval_results_text, "obj": eval_results_obj},
         "metadata": metadata
     }
 
+
+  
+
     print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
-    print(metadata)
-    print(f"---------------------------EVALUATION RESULTS --------------------------------")
-    print(eval_results)
-    print(f"---------------------------EVALUATION RESULTS --------------------------------")
+
+    print("Finish reason: ", llm_response.finish_reason)
+    print("Raw response: ", llm_response.raw)
+    print("----------------------------------------------------------------------")
+    print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
+    print(eval_results_text)
+    print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
 
     return final_output
 
 
-def write_call_overview(presentation_transcript: str, q_a_summary: str, call_type: str, prompt_version=OVERVIEW_PROMPT_VERSION, model="gpt-5-mini") -> dict:
+def write_call_overview(presentation_transcript: str, q_a_summary: str, call_type: str, prompt_version=OVERVIEW_PROMPT_VERSION, model="gpt-5-mini", text_format=OverviewOutputFormat) -> dict:
 
     print("Calling Write Call Overview")
     llm_client = get_llm_client(model)
@@ -172,13 +261,16 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
     max_output_tokens = write_call_overview_prompts.get(
         "parameters").get("max_output_tokens")
 
-    processed_system_prompt = system_prompt.format(CALL_TYPE=call_type, OUTPUT_STRUCTURE=output_structure)
-    processed_user_prompt = user_prompt.format(TRANSCRIPT=presentation_transcript, Q_A_SUMMARY=q_a_summary)
+    processed_system_prompt = system_prompt.format(
+        CALL_TYPE=call_type, OUTPUT_STRUCTURE=output_structure)
+    processed_user_prompt = user_prompt.format(
+        TRANSCRIPT=presentation_transcript, Q_A_SUMMARY=q_a_summary)
 
     llm_response = llm_client.generate(
-        system_prompt=processed_system_prompt,
+        system_prompt=processed_system_prompt,    
         user_prompt=processed_user_prompt,
-        max_output_tokens=max_output_tokens
+        max_output_tokens=max_output_tokens,
+        text_format=text_format
     )
 
     metadata = {
@@ -189,35 +281,38 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
         "finish_reason": llm_response.finish_reason,
     }
 
-    overview = llm_response.text
+    overview_obj = llm_response.parsed
+    overview_text = llm_response.text
 
-    final_output = {        
-        "overview": overview,
+    final_output = {
+        "overview": {"text": overview_text, "obj": overview_obj},
         "metadata": metadata
     }
 
     print(f"-------------CALL OVERVIEW FOR {call_type}-------------")
-    print(metadata)
-    print(f"---------------------------CALL OVERVIEW --------------------------------")
-    print(overview)
-    print(f"---------------------------CALL OVERVIEW --------------------------------")
+   
+    print("Finish reason: ", llm_response.finish_reason)
+    print("Raw response: ", llm_response.raw)
+    print("----------------------------------------------------------------------")
+    print(f"--------------------------- START OF CALL OVERVIEW --------------------------------")
+    print(overview_text)
+    print(f"--------------------------- END OF CALL OVERVIEW --------------------------------")
 
     return final_output
 
 
-# summary_output = summarize_q_a(q_a_transcript="", call_type="conference call", model="gpt-5-mini",
+# summary_output = summarize_q_a(qa_transcript="", call_type="conference call", model="gpt-5-mini",
 #               summary_length="short", prompt_version="version_1")
 
 # judge_q_a_summary(transcript="", q_a_summary=summary_output.get("summary"), summary_structure= summary_output.get("metadata").get("summary_structure"),
 #                   prompt_version="version_1", model="gpt-5-mini")
 
-summary_output= {
-    "summary": "No transcript provided",
-    "metadata": {
-        "summary_structure": "No summary structure provided"
-    }
-}
+# summary_output= {
+#     "summary": "No transcript provided",
+#     "metadata": {
+#         "summary_structure": "No summary structure provided"
+#     }
+# }
 
 
-write_call_overview(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")
-
+# write_call_overview(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")

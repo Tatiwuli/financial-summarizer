@@ -1,24 +1,94 @@
-from fastapi import FastAPI, status 
+from fastapi import FastAPI, status, Request, File, Form, UploadFile
 from fastapi.responses import JSONResponse
-from services.precheck import PrecheckError, run_precheck
-
-
+from src.services.precheck import PrecheckError, run_precheck
+from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow
+from pydantic import BaseModel
+from typing import List, Dict, Any
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Summarizer v1")
 
-@app.get("v1/precheck")
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos os métodos (GET, POST, etc.)
+    allow_headers=["*"],  # Permite todos os cabeçalhos
+)
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+class SummaryResponse(BaseModel):
+    title: str
+    call_type: str
+    blocks: List[Any]
+    meta: Dict[str, Any]
+
+
+class PrecheckResponse(BaseModel):
+    meta: Dict[str, Any]
+    blocks: List[Any]
+
+# ---------EXCEPTION HANDLERS ---------------
+
+
+@app.exception_handler(PrecheckError)
+async def precheck_error_handler(request: Request, exc: PrecheckError):
+    return JSONResponse(
+        content=ErrorResponse(error=ErrorDetail(
+            code=exc.code, message=exc.message)).model_dump(),
+        status_code=status.HTTP_400_BAD_REQUEST
+    )
+
+
+@app.exception_handler(SummaryWorkflowError)
+async def summary_workflow_error_handler(request: Request, exc: SummaryWorkflowError):
+    code_map = {
+        "llm_invalid_json": status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "llm_summary_error": status.HTTP_502_BAD_GATEWAY,
+        "llm_judge_error": status.HTTP_502_BAD_GATEWAY,
+        "llm_overview_error": status.HTTP_502_BAD_GATEWAY,
+    }
+
+    status_code = code_map.get(exc.code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return JSONResponse(
+        content=ErrorResponse(error=ErrorDetail(
+            code=exc.code, message=exc.message)).model_dump(),
+        status_code=status_code
+    )
+
+
+# ------------------- API ROUTES---------------------
+@app.get("/v1/precheck")
 def precheck():
     """
     Validate the pdf size and text sections with a pdf path 
     """
 
-    try: 
-        payload = run_precheck()
-        return payload
-    except PrecheckError as e:
-        
-        return JSONResponse(
-            content=f'{{"error":{{"code":"{e.code}","message":"{e.message}"}}}}',
-            status_code= status.HTTP_400_BAD_REQUEST,
-            media_type="application/json"
-        )
+    payload = run_precheck()
+    return payload
+
+
+@app.post("/v1/summarize")
+async def summarize(
+    file: UploadFile = File(..., description="The pdf file to summarize"),
+    call_type: str = Form(..., description="The type of call to summarize"),
+
+    summary_length: str = Form(..., description="The length of the summary")
+):
+
+    if file.content_type != "application/pdf":
+        raise PrecheckError("invalid_file_type", f"Tipo de arquivo inválido. Esperado arquivo com extensao '.pdf ', mas recebido '{file.content_type}'")
+
+    payload = run_summary_workflow(file=file, call_type=call_type, summary_length=summary_length)
+    return payload

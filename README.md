@@ -36,8 +36,6 @@
     /api
         /app: Endpoints
 
-    /utils : Functions generalizable for other components; Pure utility functions, with no business logic knowledge  
-        /pdf_processor.py: convet pdf to text, and extract q&a and presentation sections ✓
 
     /services: Functions that connect utilities functions with endpoints
         /precheck.py : Receive pdf and return valid/invalid response to endpoint ; Use pdf_processor  utility functions ✓
@@ -59,30 +57,34 @@
 .env OPENAIAPI, GEMINIAPI 
 requirements.txt
 
+#LLM config
+###OPENAI
+reasoning = {"effort": effort_level"}
+Defaults to medium
+Constrains effort on reasoning for reasoning models. Currently supported values are minimal, low, medium, and high. Reducing reasoning effort can result in faster responses and fewer tokens used on reasoning in a response.
 #LLM outputs
 - os raw outputs sao passados entre llms 
 - os outputs formatados em json com _ensure_dict eh para renderizar no frontend 
-#envelope
-###run_prrecheck()
- {
-                "type": "precheck",
-                "data": {
-                    "summary_length": SUMMARY_LENGTH,
-                    "qa_transcript": result.get("qa_transcript"),
-                    "presentation_transcript": result.get("presentation_transcript"),
-                    "pdf": {
-                        "original_filename": result.get("original_filename"),
-                        "uuid_filename": result.get("uuid_filename"),
-                        "transcript_path": result.get("transcript_path"),
-                        "presentation_text_length": pres_len,
-                        "qa_text_length": qa_len
-                    }
-                }
-            }
+
+ 
 ------------------
-TODO
-- retornar metrics tbm e append no blocks. Agora so apendamos o texto
+✏️TODO
+
+- Mudar pre-check e summarize endpoints para POST ✅
+- Editar run_precheck e run_summary_workflow para receber user inpputs dos endpoints ✅
+
+
+
+
+================= DEBUG =============
+
+------------------------
+ retornar metrics tbm e append no blocks. Agora so apendamos o texto 
+- EXPEERIMENTOS PRA DIMINUIR A LATENCIA. 
+
+- Fucao que verifica se o pdf  do transcript ja existe  ou nao 
 -- Padronizar as mensagens de erro gerado pelopdf processor. Agora, essas mensagens sao passadas para precheck, mas hardcoded. 
 - Rodar unit tests pra precheck ( deu ceto com happy path)
 - Error handling pra prompt config.
 - Validar se o true/false no llm judgeoutput eh booleano ou nao
+- Deixaro codigo de llm utils mais limpo (dica no gemini tagged - gemini na conta wu@Uni)can 
