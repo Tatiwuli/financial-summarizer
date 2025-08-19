@@ -8,14 +8,6 @@
     "scheme": "summarizerapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-    "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -23,4 +15,3 @@
       "favicon": "./assets/images/favicon.png"
     }
   }
-}
