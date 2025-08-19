@@ -18,8 +18,6 @@ fastapi
 uvicorn
 python-multipart
 uuid
-shutil
 pathlib
 statistics
-re
 
