@@ -15,6 +15,8 @@ import {
   Question,
   SummaryResult,
 } from "../types"
+import Clipboard from "@react-native-clipboard/clipboard"
+import { Ionicons } from "@expo/vector-icons"
 
 export const ResultScreen = () => {
   const { result, reset } = useSummaryStore()
@@ -26,6 +28,34 @@ export const ResultScreen = () => {
   const title = result?.title || "Untitled"
   const judgeBlock = result?.blocks.find((b: any) => b.type === "judge")
     ?.data as JudgeBlockData | undefined
+
+  const handleCopy = () => {
+    if (!result) return
+    const parts: string[] = []
+    parts.push(`Title: ${result.title}`)
+    if (overviewBlock) {
+      parts.push(`Overview:\n${overviewBlock.overview}`)
+    }
+    if (qaBlock) {
+      const qaText = qaBlock.analysts
+        .map(
+          (a) =>
+            `Analyst: ${a.name} - ${a.firm}\n` +
+            a.questions.map((q) => `Q: ${q.question}\nA: ${q.answer_summary}`).join("\n\n")
+        )
+        .join("\n\n")
+      parts.push(`Q&A:\n${qaText}`)
+    }
+    if (judgeBlock) {
+      const oa = judgeBlock.overall_assessment
+      parts.push(
+        `Assessment: ${oa.passed_criteria}/${oa.total_criteria} (${(oa.pass_rate * 100).toFixed(
+          1
+        )}%) - ${oa.overall_passed ? "Passed" : "Failed"}\n${oa.evaluation_summary}`
+      )
+    }
+    Clipboard.setString(parts.join("\n\n"))
+  }
 
   if (!result) {
     return (
@@ -89,6 +119,10 @@ export const ResultScreen = () => {
         )}
       </ScrollView>
       <View style={styles.footer}>
+        <TouchableOpacity style={styles.copyButton} onPress={handleCopy}>
+          <Ionicons name="copy-outline" size={24} color="#007AFF" />
+          <Text style={styles.copyButtonText}>Copy</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.resetButton} onPress={reset}>
           <Text style={styles.resetButtonText}>Start Over</Text>
         </TouchableOpacity>
@@ -113,7 +147,9 @@ const styles = StyleSheet.create({
   analystName: { fontSize: 16, fontWeight: "bold", marginBottom: 5 },
   questionContainer: { marginLeft: 10, marginBottom: 10 },
   questionText: { fontSize: 16, fontWeight: "500", fontStyle: "italic" },
-  footer: {
+ 
+  resetButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
+      footer: {
     position: "absolute",
     bottom: 0,
     left: 0,
@@ -129,5 +165,14 @@ const styles = StyleSheet.create({
     padding: 15,
     alignItems: "center",
   },
-  resetButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
+
+  copyButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600", marginLeft: 8 },
+  copyButton: {
+    backgroundColor: "#34C759",
+    borderRadius: 12,
+    padding: 15,
+    alignItems: "center",
+    flexDirection: "row",
+    marginBottom: 10,
+  },
 })
