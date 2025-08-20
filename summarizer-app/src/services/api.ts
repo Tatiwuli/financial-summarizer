@@ -2,7 +2,7 @@
 
 import axios from "axios"
 import { DocumentPickerAsset } from "expo-document-picker"
-import { API_BASE } from "../../env" 
+import { API_BASE } from "../env" 
 
 // !! IMPORTANTE !!
 

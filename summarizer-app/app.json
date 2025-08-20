@@ -9,9 +9,10 @@
     "scheme": "summarizerapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-      "edgeToEdgeEnabled": true
-    },
-    "web": {
-      "bundler": "metro"
-    }
-  }
+    "edgeToEdgeEnabled": true
+  },
+  "web": {
+    "bundler": "metro"
+  },
+  "build": "echo \"EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL\" && expo export --platform web"
+}
