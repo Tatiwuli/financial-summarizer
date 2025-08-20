@@ -2,16 +2,11 @@
 
 import axios from "axios"
 import { DocumentPickerAsset } from "expo-document-picker"
+import { API_BASE } from "../env"
 
-// !! IMPORTANTE !!
-
-// Substitua 'YOUR_COMPUTER_IP' pelo endereço IP da sua máquina na sua rede Wi-Fi.
-// Emuladores/dispositivos não conseguem acessar 'localhost' ou '127.0.0.1'.
-// Windows: `ipconfig` | macOS/Linux: `ifconfig`
-const API_BASE_URL = "http://192.168.1.22:8000"
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL
+  baseURL: API_BASE
 })
 
 /**
