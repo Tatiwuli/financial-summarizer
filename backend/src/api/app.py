@@ -5,10 +5,10 @@ from src.services.summary_workflow import SummaryWorkflowError, run_summary_work
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
+
 import os 
 
 app = FastAPI(title="Summarizer v1")
-
 
 raw_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
@@ -16,7 +16,7 @@ ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,  
-    allow_credentials= True,
+    allow_credentials= False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
