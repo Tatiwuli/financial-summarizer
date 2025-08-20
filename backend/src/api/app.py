@@ -5,7 +5,7 @@ from src.services.summary_workflow import SummaryWorkflowError, run_summary_work
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
-
+from datetime import datetime
 import os 
 
 app = FastAPI(title="Summarizer v1")
@@ -77,6 +77,11 @@ async def summary_workflow_error_handler(request: Request, exc: SummaryWorkflowE
 @app.get("/")
 def root():
     return {"message": "Financial Summarizer API"}
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.get("/v1/precheck")
 def precheck():
