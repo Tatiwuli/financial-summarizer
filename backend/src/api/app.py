@@ -5,18 +5,23 @@ from src.services.summary_workflow import SummaryWorkflowError, run_summary_work
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
+import os 
 
 app = FastAPI(title="Summarizer v1")
 
-origins = ["*"]
 
+raw_origins = os.getenv("CORS_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
+# Enable CORS for React Native
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite todos os métodos (GET, POST, etc.)
-    allow_headers=["*"],  # Permite todos os cabeçalhos
+    allow_origins=ALLOWED_ORIGINS,  
+    allow_credentials= True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+
 
 class ErrorDetail(BaseModel):
     code: str

@@ -7,12 +7,10 @@ PyMuPDF==1.23.22
 # Integração com Google Gemini (SDK moderno)
 google-generativeai
 openai
-pydantic
 python-dotenv>=1.0.1
 
 # Utilitários para manipulação de arquivos e dados
 pathlib2==2.3.7
-
 
 fastapi
 uvicorn
