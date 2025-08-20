@@ -74,6 +74,10 @@ async def summary_workflow_error_handler(request: Request, exc: SummaryWorkflowE
 
 
 # ------------------- API ROUTES---------------------
+@app.get("/")
+def root():
+    return {"message": "Financial Summarizer API"}
+
 @app.get("/v1/precheck")
 def precheck():
     """
