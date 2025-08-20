@@ -133,14 +133,14 @@ export const ResultScreen = () => {
 
 const styles = StyleSheet.create({
   wrapper: { flex: 1, backgroundColor: "#FFFFFF" },
-  container: { padding: 20, paddingBottom: 100 },
+  container: { padding: 20, paddingBottom: 100 , backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#000000"},
   title: { fontSize: 26, fontWeight: "bold", marginBottom: 20 },
   section: { marginBottom: 25 },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "600",
     marginBottom: 10,
-    color: "#007AFF",
+    color: "#000000",
   },
   bodyText: { fontSize: 16, lineHeight: 24, color: "#3C3C43" },
   analystContainer: { marginBottom: 15 },
