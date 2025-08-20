@@ -1,8 +1,6 @@
-
-
 import axios from "axios"
 import { DocumentPickerAsset } from "expo-document-picker"
-import { API_BASE } from "../env" 
+import { API_BASE } from "../../env"
 
 // !! IMPORTANTE !!
 
@@ -11,7 +9,7 @@ import { API_BASE } from "../env"
 // Windows: `ipconfig` | macOS/Linux: `ifconfig`
 
 const apiClient = axios.create({
-  baseURL: API_BASE
+  baseURL: API_BASE,
 })
 
 /**
@@ -23,21 +21,19 @@ export const summarizePdf = async (
   summaryLength: string
 ) => {
   // FormData é o formato necessário para enviar arquivos via HTTP.
-  const webFile = (file as any).file as File | undefined;
-  if (!webFile){
+  const webFile = (file as any).file as File | undefined
+  if (!webFile) {
     throw new Error("File not found")
   }
 
   // O backend espera um arquivo no campo 'file'.
   // Criamos um objeto compatível com o que o FormData espera.
-  const formData = new FormData();
-  formData.append("file", webFile, webFile.name  || file.name  || "document.pdf")
+  const formData = new FormData()
+  formData.append("file", webFile, webFile.name || file.name || "document.pdf")
   formData.append("call_type", callType)
   formData.append("summary_length", summaryLength)
 
   console.log("[apiService] file:", file)
-
-
 
   try {
     console.log("[apiService] Enviando requisição para /v1/summarize...")
