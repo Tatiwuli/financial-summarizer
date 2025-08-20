@@ -14,3 +14,8 @@ pathlib2==2.3.7
 
 fastapi
 uvicorn
+python-multipart
+uuid
+pathlib
+statistics
+
