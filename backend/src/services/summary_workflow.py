@@ -17,7 +17,7 @@ class SummaryWorkflowError(Exception):
 def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
 
     blocks = []
-    all_metadata = {}
+
     validated_overview = None  # Variable scope
 
     # Validate PDF
@@ -66,13 +66,11 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
         blocks.append(
             {
                 "type": block_type,
+                "metadata": summary_metadata,
                 "data": qa_summary_obj.model_dump()
             }
         )
 
-        all_metadata["summary_metadata"] = all_metadata.get(
-            "summary_metadata", {})
-        all_metadata["summary_metadata"].update(summary_metadata)
 
     except ValidationError as e:
         raise SummaryWorkflowError("llm_invalid_json", str(e))
@@ -82,35 +80,27 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
 
     # 3) JUDGE (obrigatório e sempre após Q&A)
 
-    try:
-        judge_resp = judge_q_a_summary(
-            transcript=qa_transcript,
-            q_a_summary=qa_summary_text,    # passe o MESMO texto que o summarize gerou
-            summary_structure=summary_metadata.get("summary_structure")
-        )
+    judge_summary_obj, judge_summary_metadata = run_judge_workflow(version_prompt="version_2", qa_transcript=qa_transcript, qa_summary=qa_summary_text, summary_structure= summary_metadata.get("summary_structure", ""))
+    
+    blocks.append(
+        {
+            "type": "judge",
+            "metadata": judge_summary_metadata,
+            "data": judge_summary_obj.model_dump()
+        }
+    )
 
-        # Convert the Pydantic model to dict format expected by map_judge
-        # Transform list-based evaluation_results to dict-based format
-        judge_summary_obj = judge_resp.get("eval_results", {}).get("obj")
-        judge_summary_metadata = judge_resp.get("metadata", {})
-        if not judge_summary_obj:
-            raise ValidationError(
-                "LLM did not return a parsed Pydantic object for Judge")
+    judge_summary_obj2, judge_summary_metadata2 = run_judge_workflow(
+        version_prompt="version_3", qa_transcript=qa_transcript, qa_summary=qa_summary_text, summary_structure=summary_metadata.get("summary_structure", ""))
 
-        blocks.append(
-            {
-                "type": "judge",
-                "data": judge_summary_obj.model_dump()
-            }
-        )
+    blocks.append(
+        {
+            "type": "judge",
+            "metadata": judge_summary_metadata2,
+            "data": judge_summary_obj2.model_dump()
+        }
+    )
 
-        all_metadata["judge_metadata"] = all_metadata.get("judge_metadata", {})
-        all_metadata["judge_metadata"].update(judge_summary_metadata)
-
-    except ValidationError as e:
-        raise SummaryWorkflowError("llm_invalid_json", str(e))
-    except Exception as e:
-        raise SummaryWorkflowError("llm_judge_error", str(e))
 
     # 4) OVERVIEW (obrigatório)
     try:
@@ -133,13 +123,10 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
         blocks.append(
             {
                 "type": "overview",
+                "metadata": ov_metadata,
                 "data": validated_overview.model_dump()
             }
         )
-
-        all_metadata["overview_metadata"] = all_metadata.get(
-            "overview_metadata", {})
-        all_metadata["overview_metadata"].update(ov_metadata)
 
     except ValidationError as e:
         raise SummaryWorkflowError("llm_invalid_json", str(e))
@@ -150,6 +137,45 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
     return {
         "title": validated_overview.title if validated_overview else "Untitled",
         "call_type": call_type,
-        "blocks": blocks,   # ordem: q_a_* → judge → overvie
-        "meta": all_metadata
+        "blocks": blocks   # ordem: q_a_* → judge → overvie
     }
+
+def run_judge_workflow( version_prompt: str, qa_transcript: str, qa_summary: str, summary_structure: str):
+
+   
+
+    if not qa_transcript:
+
+        raise SummaryWorkflowError(
+            "precheck_error", f"No Q&A transcript found")
+
+    try:
+        judge_resp = judge_q_a_summary(
+            transcript=qa_transcript,
+            q_a_summary=qa_summary,    # passe o MESMO texto que o summarize gerou
+            summary_structure= summary_structure,
+            prompt_version=version_prompt
+        )
+
+        # Convert the Pydantic model to dict format expected by map_judge
+        # Transform list-based evaluation_results to dict-based format
+        judge_summary_obj = judge_resp.get("eval_results", {}).get("obj")
+        judge_summary_metadata = judge_resp.get("metadata", {})
+        if not judge_summary_obj:
+            raise ValidationError(
+                "LLM did not return a parsed Pydantic object for Judge")
+
+    
+        print("--------------------------------")
+        print("Version: ", version_prompt)
+        print("JUDGE OUTPUT: ")
+        print(judge_summary_obj)
+        print()
+        print("JUDGE METADATA: ")
+        print(judge_summary_metadata)
+        return judge_summary_obj, judge_summary_metadata
+        
+    except ValidationError as e:
+        raise SummaryWorkflowError("llm_invalid_json", str(e))
+    except Exception as e:
+        raise SummaryWorkflowError("llm_judge_error", str(e))

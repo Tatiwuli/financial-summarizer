@@ -64,6 +64,8 @@ def run_precheck(file: UploadFile):
         "blocks": [
             {
                 "type": "precheck",
+                "metadata": {
+                    "generated_at": None},
                 "data": {
                     # Fixed: use correct key
                     "qa_transcript": result.get("q_a_transcript"),
@@ -77,10 +79,7 @@ def run_precheck(file: UploadFile):
                     }
                 }
             }
-        ],
-        "meta": {
-            "generated_at": None
-        }
+        ]
     }
 
     return envelope

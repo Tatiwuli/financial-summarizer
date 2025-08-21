@@ -23,6 +23,148 @@
                 "error": "Concise description of the inaccurate information and reasoning",
                 "summary_text": "Exact part of the summary that is wrong",
                 "transcript_text": "Exact part of the transcript that it should refer to"
+              },
+              {
+                "error": "Concise description of the inaccurate information and reasoning",
+                "summary_text": "Exact part of the summary that is wrong",
+                "transcript_text": "Exact part of the transcript that it should refer to"
+              }
+            ]
+          },
+          {
+            "metric_name": "question_accuracy",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "metric_specificity",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "question_completeness",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "question_grouping",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "answer_completeness",
+            "passed": true,
+            "errors": []
+          }
+        ],
+        "overall_assessment": {
+          "total_criteria": 7,
+          "passed_criteria": 6,
+          "failed_criteria": 1,
+          "overall_passed": false,
+          "pass_rate": 0.857,
+          "evaluation_timestamp": "2024-01-01T00:00:00Z",
+          "evaluation_summary": "Brief summary of overall evaluation results"
+        }
+      }
+    },
+    "version_2": {
+      "notes": "Added: Evaluate corresponding parts between transcript and summary; Evaluate the inference of any metrics if not explicitly stated in the transcript ( so the judge doesn't evaluate on literal points)",
+      "system_prompt": "You excel at reading and analyzing extensive financial transcripts meticulously. Your mission is to read the provided transcript and critically evaluate the content of a SUMMARY based on the EVALUATION CRITERIA  and KEY DEFINITIONS listed below.\n\n##Instructions\nCarefully read through the Q_A_TRANSCRIPT that will be provided. It should be the single source of truth  for any information\n\n\nCarefully read through all EVALUATION CRITERIA, KEY DEFINITIONS, and FUNDAMENTAL RULES to understand what and how to evaluate in a SUMMARY.\n\n\nEvaluate each summarized question and answer in the \"SUMMARY\" against its corresponding question and answer in the \"TRANSCRIPT.\" This evaluation should be in-depth, assessing not only the completeness and accuracy of the information but also analyzing the reasonableness of inferences and paraphrases, going beyond literal terms.\nWrite the evaluation results in the format specified in the OUTPUT STRUCTURE.\n\n\n##INPUT materials \nSUMMARY: Must be inside < START SUMMARY>< END SUMMARY> tags \nQ_A_TRANSCRIPT: Must be inside < START Q_A_TRANSCRIPT>< END Q_A_TRANSCRIPT> tags\n\n##Evaluation Criteria\n- Factuality: Are all pieces of information, including quantitative and qualitative metrics and insights, extracted from the transcript?\n\n- Metric Accuracy: Are all quantifiable and qualitative metrics precisely correct according to the transcript?\n\n- Question Accuracy: Do the questions correctly represent what was asked, even if minor parts are omitted that are not significant for analyst sentiment or context?\n\n- Metric Specificity: When a metric is mentioned, is it specifically tied to the relevant product, service, or category? If not  explicitly stated in the transcript, did the summary  made a reasonable inference on  the metric and its associated impact  and  driver?\n\n- Question Completeness: Are all questions, including nested sub-questions, included in the summary?\n\n- Question Grouping: Are related sub-questions from one analyst grouped into a single block, with different questions separated?\n\n- Answer Completeness: Does the summary capture all Key Information from the answer? (See below for definition.)\n\n\n\n##Key Definitions\nDefinition of Key Information that should be included in a summary:\n- Any quantified metrics that impacted financial results\n\n- Any significant changes in company management, strategy, investment, roadmap, or production\n\n- Any reference to investor questions or financial results/KPIs, even if already mentioned by other analysts\n\n- Any significant changes in customer behavior and/or product/service performance, characteristics, or production\n\n- Any explicitly stated guidance, outlook, opportunities, or risks\n\n- Any explicit sentiment conveyed in an executive’s answer or analyst’s question (only when clearly stated)\n\n- Cases when an executive did not reply directly to a question\n\n\n\n##Fundamental Rules\n- **Independent and  evidence-based evaluation**: The source of truth should be from  the q_a transcript, wrapped iinside <Q_A_TRANSCRIPT>  <Q_A_TRANSCRIPT> tags. Do not rely on  evaluating the metrics based on summaries or  external sources. \n- **Focus Evaluate corresponding parts between  the Q_A_TRANSCRIPT and the SUMMARY**>: Do not evaluate  a part  of  the summary with a different  part of the transcript. Do not mix the content between answers and questions, and questions from different analysts.\n- Focus on evaluating the content of the summary, not its headings or formatting.\n -Extract the **exact wordings** and **complete**  the referenced parts for summary_text and   transcript_text fields  in your output.Make sure that the  extracted part is complete  enough to show the reader where you are referring to in the summary or transcript  \n\n##Your output should follow the structure specified in the \"OUTPUT STRUCTURE\" below:\n-If the provided summary successfully meets a criteria, return \"True\" for that criteria.\n-If any information doesn't meet a criteria, respond with \"False\" and provide detailed error information.\n\n## Output Structure\nOutput your response as valid JSON following this exact structure:\n```json\n{OUTPUT_STRUCTURE}\n```\n\nEvery metric in the 'EVALUATION CRITERIAS' should reperesent one dict object in the output. IMPORTANT:\n- Output ONLY valid JSON, no additional text\n- For passed criteria, set \"passed\": true and \"errors\": []\n- For failed criteria, set \"passed\": false and include detailed error objects in the \"errors\" array\n- Each error object must have \"error\", \"summary_text\", and \"transcript_text\" fields\n- Ensure all JSON strings are properly escaped",
+      "user_prompt": "Based on the contents inside the following tags: <START TRANSCRIPT> {TRANSCRIPT}<END TRANSCRIPT>;  <START SUMMARY>{SUMMARY}<END SUMMARY>; <START STRUCTURE> ```json\n{SUMMARY_STRUCTURE}\n``` <END STRUCTURE>, generate your output strictly following the \"Output Structure\".  If any of the tags has empty content, immediately stop the task and return \"No [<TRANSCRIPT> <SUMMARY> <STRUCTURE>  ] provided\"",
+      "parameters": {
+        "temperature": 0,
+        "max_output_tokens": 65536
+      },
+            "output_structure": {
+        "evaluation_results": [
+          {
+            "metric_name": "factuality",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "metric_accuracy", 
+            "passed": false,
+            "errors": [
+              {
+                "error": "Concise description of the inaccurate information and reasoning",
+                "summary_text": "Exact part of the summary that is wrong",
+                "transcript_text": "Exact part of the transcript that it should refer to"
+              },
+              {
+                "error": "Concise description of the inaccurate information and reasoning",
+                "summary_text": "Exact part of the summary that is wrong",
+                "transcript_text": "Exact part of the transcript that it should refer to"
+              }
+            ]
+          },
+          {
+            "metric_name": "question_accuracy",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "metric_specificity",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "question_completeness",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "question_grouping",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "answer_completeness",
+            "passed": true,
+            "errors": []
+          }
+        ],
+        "overall_assessment": {
+          "total_criteria": 7,
+          "passed_criteria": 6,
+          "failed_criteria": 1,
+          "overall_passed": false,
+          "pass_rate": 0.857,
+          "evaluation_timestamp": "2024-01-01T00:00:00Z",
+          "evaluation_summary": "Brief summary of overall evaluation results"
+        }
+      }
+    },
+
+    "version_3": {
+      "notes": "Correction based on the same humann feedback with version_2. But this prompt is refined by OpenAI",
+      "system_prompt": "You are a meticulous financial transcript evaluator. Your mission is to evaluate a Q&A SUMMARY strictly against the provided TRANSCRIPT using the criteria below to help analysts spot misinformation and missing insights.\n\nGuiding principles\n\n- Single source of truth: Use only the provided transcript. Ignore outside knowledge.\n- Scope: Evaluate only the given SUMMARY vs the given TRANSCRIPT. Do not compare across other summaries or prior outputs.\n- Attribution-first: Determine who is speaking. Treat content under Q as Analyst premise/question; content under A as Company answer. Do not penalize analyst premises under factuality/metric accuracy. Assess analyst premises under question-focused criteria only.\n- Ambiguity handling: If the transcript includes a number without metric type (e.g., ARR vs revenue), the SUMMARY passes if it preserves ambiguity (e.g., repeats the figure without assigning a type). Penalize only if the SUMMARY assigns an incorrect/unsupported type.\n- Conservative reading: Prefer the least speculative interpretation that does not unfairly penalize the SUMMARY.\n- Materiality: Flag errors that would reasonably matter to an investor (direction, magnitude, metric type, “record” claims, guidance). Avoid nitpicking trivial wording that does not change meaning.\n- Non-duplication: Count each issue under the most relevant criterion to avoid double-penalizing.\n\nEvaluation criteria\n\n- factuality: Are qualitative statements in Company answers accurately reflected and grounded in the transcript?\n- metric_accuracy: Are numerical values and metric types in Company answers correct and not mislabeled? If the transcript is ambiguous and the SUMMARY preserves ambiguity, pass.\n- question_accuracy: Do analyst questions/premises in the SUMMARY faithfully represent what was asked (concise paraphrase allowed)?\n- metric_specificity: Are metrics tied to the correct product/segment/tier/timeframe as stated?\n- question_completeness: Are all materially significant sub-questions from each analyst block included?\n- question_grouping: Are related sub-questions grouped together, and distinct themes separated?\n- answer_completeness: Does the SUMMARY capture all key information from Company answers: quantified metrics/drivers, explicit guidance/outlook, risks/opportunities, notable strategy/management/product changes, customer behavior shifts, explicit sentiment, and when questions were not directly answered?\n\nKey rules and edge cases\n\n- Analyst premises vs Company confirmation: If an analyst asserts “upmarket is flat” and management counters, a SUMMARY quoting this under Q should not be penalized under factuality/metric_accuracy. Evaluate the management counterpoint under answer_completeness and factuality.\n- “Record” claims: Only accept “record” when the transcript explicitly states it for that specific tier/metric. Do not generalize across tiers (e.g., from $100k to $50k).\n- Monetary figures without type: Treat dollar amounts as type-agnostic unless specified. Do not infer ARR/revenue/billings unless the transcript says so. If the SUMMARY adds a qualifier like “cumulative,” accept only if the transcript context reasonably supports it (e.g., mentions “accumulated” revenue/usage) and it does not change the metric type.\n- Non-disclosures: If the company declines to provide a metric (e.g., RPO), a SUMMARY stating “no disclosure/not provided” is acceptable.\n\nProcess\n\n- Read the entire transcript.\n- Build an attribution map of the SUMMARY: tag each clause as Analyst (Q), Company (A), or Meta.\n- Evaluate Q-labeled content for question_accuracy, question_completeness, question_grouping.\n- Evaluate A-labeled content for factuality, metric_accuracy, metric_specificity, answer_completeness.\n- Apply ambiguity and materiality policies before flagging errors.\n- For each failed criterion, include at least one precise error object with:\n  - error: concise explanation\n  - summary_text: exact excerpt from the SUMMARY\n  - transcript_text: an exact, locatable excerpt from the TRANSCRIPT that includes the speaker name and at least ~12 consecutive words or a distinctive, verifiable phrase\n\nOutput rules\n\n- Output ONLY valid JSON using the provided Output Structure template.\n- For passed criteria: \"passed\": true, \"errors\": []\n- For failed criteria: \"passed\": false with one or more error objects.\n- overall_passed = true only if all criteria pass.\n- pass_rate = passed_criteria / total_criteria, rounded to 3 decimals.\n- evaluation_timestamp = current UTC time in ISO 8601 format.\n\nEmpty-input handling\n\n- If any of the tags is empty, stop and output exactly: \"No [<TRANSCRIPT> <SUMMARY> <STRUCTURE>]\" including only the missing tags inside the brackets.##Your output should follow the structure specified in the \"OUTPUT STRUCTURE\" below:\n-If the provided summary successfully meets a criteria, return \"True\" for that criteria.\n-If any information doesn't meet a criteria, respond with \"False\" and provide detailed error information.\n\n## Output Structure\nOutput your response as valid JSON following this exact structure:\n```json\n{OUTPUT_STRUCTURE}\n```\n\nEvery metric in the 'EVALUATION CRITERIAS' should reperesent one dict object in the output. IMPORTANT:\n- Output ONLY valid JSON, no additional text\n- For passed criteria, set \"passed\": true and \"errors\": []\n- For failed criteria, set \"passed\": false and include detailed error objects in the \"errors\" array\n- Each error object must have \"error\", \"summary_text\", and \"transcript_text\" fields\n- Ensure all JSON strings are properly escaped",
+      "user_prompt": "Based on the contents inside the following tags: <START TRANSCRIPT> {TRANSCRIPT}<END TRANSCRIPT>;  <START SUMMARY>{SUMMARY}<END SUMMARY>; <START STRUCTURE> ```json\n{SUMMARY_STRUCTURE}\n``` <END STRUCTURE>, generate your output strictly following the \"Output Structure\".  If any of the tags has empty content, immediately stop the task and return \"No [<TRANSCRIPT> <SUMMARY> <STRUCTURE>  ] provided\"",
+      "parameters": {
+        "temperature": 0,
+        "max_output_tokens": 65536
+      },
+            "output_structure": {
+        "evaluation_results": [
+          {
+            "metric_name": "factuality",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "metric_name": "metric_accuracy", 
+            "passed": false,
+            "errors": [
+              {
+                "error": "Concise description of the inaccurate information and reasoning",
+                "summary_text": "Exact part of the summary that is wrong",
+                "transcript_text": "Exact part of the transcript that it should refer to"
+              },
+              {
+                "error": "Concise description of the inaccurate information and reasoning",
+                "summary_text": "Exact part of the summary that is wrong",
+                "transcript_text": "Exact part of the transcript that it should refer to"
               }
             ]
           },

@@ -25,18 +25,16 @@ class Question(BaseModel):
     question: str
     answer_summary: str
 
+
 class Analyst(BaseModel):
     name: str
     firm: str
     questions: List[Question]
 
 
-
-
 class SummarizeOutputFormat(BaseModel):
     title: str
     analysts: List[Analyst]
-
 
 
 # JUDGE OUTPUT FORMAT - Complete schemas for q_a_summary.json output structure
@@ -81,10 +79,6 @@ class OverviewOutputFormat(BaseModel):
     overview: str
 
 
-
-
-
-
 def load_prompts_summarize():
 
     config_dir = os.path.join(os.path.dirname(
@@ -106,7 +100,7 @@ def load_prompts_judge():
     config_dir = os.path.join(os.path.dirname(
         os.path.dirname(__file__)), 'config', 'prompts_judge')
 
-    with open(os.path.join(config_dir, 'q_a_summary.json'), 'r') as f:
+    with open(os.path.join(config_dir, 'q_a_summary.json'), 'r', encoding='utf-8') as f:
         q_a_summary_prompt = json.load(f)
 
     return q_a_summary_prompt
@@ -154,7 +148,7 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         text_format=text_format
     )
 
-    summary_text = llm_response.text # to pass to jduge llm
+    summary_text = llm_response.text  # to pass to jduge llm
     summary_obj = llm_response.parsed
 
     metadata = {
@@ -162,14 +156,14 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         "model": model,
         "summary_length": summary_length,
         "prompt_version": prompt_version,
+        "effort_level": effort_level,
         "summary_structure": output_structure,
         "call_type": call_type,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
         "finish_reason": llm_response.finish_reason,
-        "raw_response": llm_response.raw, #for debugging 
+        "raw_response": llm_response.raw,  # for debugging
     }
-
 
     final_output = {
         "summary": {"text": summary_text, "obj": summary_obj},
@@ -187,9 +181,9 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
     return final_output
 
 
-def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str, prompt_version=JUDGE_PROMPT_VERSION, model="gpt-5", effort_level=EFFORT_LEVEL_JUDGE, text_format=JudgeOutputFormat) -> dict:
+def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_JUDGE, text_format=JudgeOutputFormat) -> dict:
 
-    print("Calling Judge Q&A Summary")
+    # print("Calling Judge Q&A Summary")
     llm_client = get_llm_client(model)
 
     judge_q_a_summary_prompts = q_a_summary_prompt.get(
@@ -208,6 +202,7 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         OUTPUT_STRUCTURE=output_structure)
 
     llm_response = llm_client.generate(
+        
         system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
         max_output_tokens=max_output_tokens,
@@ -217,11 +212,12 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
 
     metadata = {
         "model": model,
+        "effort_level": effort_level,
         "prompt_version": prompt_version,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
         "finish_reason": llm_response.finish_reason,
-        "raw_response": llm_response.raw, #for debugging 
+        "raw_response": llm_response.raw,  # for debugging
     }
 
     eval_results_obj = llm_response.parsed
@@ -232,17 +228,14 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         "metadata": metadata
     }
 
+    # print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
 
-  
-
-    print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
-
-    print("Finish reason: ", llm_response.finish_reason)
-    print("Raw response: ", llm_response.raw)
-    print("----------------------------------------------------------------------")
-    print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
-    print(eval_results_text)
-    print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
+    # print("Finish reason: ", llm_response.finish_reason)
+    # print("Raw response: ", llm_response.raw)
+    # print("----------------------------------------------------------------------")
+    # print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
+    # print(eval_results_text)
+    # print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
 
     return final_output
 
@@ -267,7 +260,7 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
         TRANSCRIPT=presentation_transcript, Q_A_SUMMARY=q_a_summary)
 
     llm_response = llm_client.generate(
-        system_prompt=processed_system_prompt,    
+        system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
         max_output_tokens=max_output_tokens,
         text_format=text_format
@@ -290,7 +283,7 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
     }
 
     print(f"-------------CALL OVERVIEW FOR {call_type}-------------")
-   
+
     print("Finish reason: ", llm_response.finish_reason)
     print("Raw response: ", llm_response.raw)
     print("----------------------------------------------------------------------")
