@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, Optional, Type
 import time
 
+
 from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, write_call_overview
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.services.precheck import run_precheck
@@ -172,7 +173,7 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
     return {
         "title": validated_overview.title if validated_overview else "Untitled",
         "call_type": call_type,
-        "blocks": blocks  
+        "blocks": blocks
     }
 
 
