@@ -18,7 +18,7 @@ type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
 
 export const UploadScreen: React.FC = () => {
-  const [callType, setCallType] = useState<CallType>("conference")
+  const [callType, setCallType] = useState<CallType>("earnings")
   const [summaryLength, setSummaryLength] = useState<SummaryLength>("long")
   const [selectedFile, setSelectedFile] =
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
@@ -91,11 +91,13 @@ export const UploadScreen: React.FC = () => {
             isActive={callType === "earnings"}
             onPress={() => setCallType("earnings")}
           />
+          {/** Temporarily hidden for deploy
           <ToggleButton
             label="Conference Call"
             isActive={callType === "conference"}
             onPress={() => setCallType("conference")}
           />
+          */}
         </View>
 
         <Text style={styles.label}>Select the summary length</Text>
@@ -109,6 +111,8 @@ export const UploadScreen: React.FC = () => {
             label="Short Summary"
             isActive={summaryLength === "short"}
             onPress={() => setSummaryLength("short")}
+            disabled={callType === "conference"}
+            style={callType === "conference" ? { opacity: 0.6 } : undefined}
           />
         </View>
 

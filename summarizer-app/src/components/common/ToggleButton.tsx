@@ -6,6 +6,7 @@ interface ToggleButtonprops {
   isActive: boolean
   onPress: () => void
   style?: ViewStyle
+  disabled?: boolean
 }
 
 export const ToggleButton: React.FC<ToggleButtonprops> = ({
@@ -13,6 +14,7 @@ export const ToggleButton: React.FC<ToggleButtonprops> = ({
   isActive,
   onPress,
   style,
+  disabled,
 }) => {
   return (
     <TouchableOpacity
@@ -20,15 +22,19 @@ export const ToggleButton: React.FC<ToggleButtonprops> = ({
         [
           styles.button,
           isActive ? styles.activeButton : styles.inactiveButton,
+          disabled ? styles.disabledButton : undefined,
           style,
         ] //last style eh opcao opcional caso quiser customizar o estilo para um btn especifico
       }
       onPress={onPress}
+      disabled={disabled}
+      activeOpacity={disabled ? 1 : 0.7}
     >
       <Text
         style={[
           styles.text,
           isActive ? styles.activeText : styles.inactiveText,
+          disabled ? styles.disabledText : undefined,
         ]}
       >
         {label} {/* show label on the button */}
@@ -55,6 +61,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     borderColor: "#E5E5EA",
   },
+  disabledButton: {
+    backgroundColor: "#EDEDED",
+    borderColor: "#E5E5EA",
+  },
   text: {
     fontSize: 16,
     fontWeight: "400",
@@ -64,5 +74,8 @@ const styles = StyleSheet.create({
   },
   inactiveText: {
     color: "rgb(0, 0, 0)",
+  },
+  disabledText: {
+    color: "#A0A0A0",
   },
 })
