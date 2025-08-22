@@ -24,6 +24,38 @@ export interface OverviewBlockData {
   title: string
   executives_list: Array<{ executive_name: string; role: string }>
   overview: string
+  guidance_outlook?: string
+}
+
+// Metadata from backend
+export interface SummaryMetadata {
+  model: string
+  summary_length: string
+  prompt_version: string
+  summary_structure: string
+  call_type: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  raw_response?: unknown
+}
+
+export interface JudgeMetadata {
+  model: string
+  prompt_version: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  raw_response?: unknown
+}
+
+export interface OverviewMetadata {
+  model: string
+  prompt_version: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  raw_response?: unknown
 }
 
 // Defines the shape of the data inside a 'judge' block
