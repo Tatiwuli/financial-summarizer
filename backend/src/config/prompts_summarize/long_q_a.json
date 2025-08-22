@@ -45,7 +45,7 @@
       },
       "parameters": {
         "temperature": 0,
-        "max_output_tokens": 65536
+        "max_output_tokens": 40000 
       }
     },
     "version_3": {
@@ -69,7 +69,7 @@
       },
       "parameters": {
         "temperature": 0,
-        "max_output_tokens": 65536
+        "max_output_tokens": 40000
       }
     }
   }

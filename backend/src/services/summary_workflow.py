@@ -1,9 +1,9 @@
 import json
 from typing import Any, Dict, Optional, Type
-from concurrent.futures import ThreadPoolExecutor
 import time
-import random
+
 from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, write_call_overview
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.services.precheck import run_precheck
 from src.config.runtime import CALL_TYPE, SUMMARY_LENGTH, SHORT_Q_A_PROMPT_VERSION, LONG_Q_A_PROMPT_VERSION
 from fastapi import UploadFile
@@ -56,6 +56,9 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
         )
         # Texto (string JSON) retornado pelo LLM
         summary_metadata = qa_resp.get("metadata", {})
+        remaining_tokens = summary_metadata.get("remaining_tokens")
+
+        total_time_sec = (summary_metadata.get("time") or 0)
         qa_summary_obj = qa_resp.get("summary", {}).get("obj")
         qa_summary_text = qa_resp.get(
             "summary", {}).get("text", "Empty summary")
@@ -79,112 +82,97 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
         raise SummaryWorkflowError(
             "llm_summary_error", str(e))  # broader exception
 
-    # 3) JUDGE and 4) OVERVIEW in parallel to reduce latency
+    # 3) Judge and Overview in parallel
+    # Backoff ONCE based only on summary remaining tokens with threshold=40k
+    def exponential_backoff(remaining: Optional[int], threshold: int):
+        if remaining is None:
+            return
+        if remaining < threshold:
+            for attempt in range(3):
+                sleep_seconds = 2 ** attempt
+                time.sleep(sleep_seconds)
+            return
 
-    def with_retry(func, *args, **kwargs):
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                return func(*args, **kwargs)
-            except SummaryWorkflowError as e:
-                message = str(e)
-                is_rate = ("429" in message) or ("rate" in message.lower())
-                if not is_rate or attempt == max_attempts - 1:
-                    raise
-                # Exponential backoff with jitter
-                time.sleep((2 ** attempt) + random.uniform(0, 0.3))
-            except Exception as e:
-                message = str(e)
-                is_rate = ("429" in message) or ("rate" in message.lower())
-                if not is_rate or attempt == max_attempts - 1:
-                    raise
-                time.sleep((2 ** attempt) + random.uniform(0, 0.3))
+    # MAX TOKENS COMBINED FOR JUDGE AND OVERVIEW
+    exponential_backoff(remaining_tokens, 40000)
 
-    # Prepare parallel jobs
-    def job_judge(version: str):
-        return with_retry(
-            run_judge_workflow,
-            version_prompt=version,
+    results: Dict[str, Any] = {}
+    errors: Dict[str, Exception] = {}
+
+    def run_judge():
+        return run_judge_workflow(
+            version_prompt="version_2",
             qa_transcript=qa_transcript,
             qa_summary=qa_summary_text,
-            summary_structure=summary_metadata.get("summary_structure", "")
+            summary_structure=summary_metadata.get("summary_structure", ""),
         )
 
-    def job_overview():
-        return with_retry(
-            write_call_overview,
+    def run_overview():
+        return write_call_overview(
             presentation_transcript=presentation_transcript or "The call didn't have a presentation section. Refer to the Q&A summary instead",
             q_a_summary=qa_summary_text,
             call_type=call_type
         )
 
-    judge_results: Dict[str, Any] = {}
-    ov_result: Optional[dict] = None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_to_key = {
+            executor.submit(run_judge): "judge",
+            executor.submit(run_overview): "overview",
+        }
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                results[key] = future.result()
+            except Exception as exc:
+                errors[key] = exc
 
-    # Launch jobs with tiny stagger to smooth burst
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_judge_v2 = executor.submit(job_judge, "version_2")
-        time.sleep(0.15)
-        future_judge_v3 = executor.submit(job_judge, "version_3")
-        time.sleep(0.15)
-        future_overview = executor.submit(job_overview)
-
-        try:
-            judge_summary_obj, judge_summary_metadata = future_judge_v2.result()
-            judge_results["version_2"] = (
-                judge_summary_obj, judge_summary_metadata)
-        except Exception as e:
-            raise SummaryWorkflowError("llm_judge_error", str(e))
-
-        try:
-            judge_summary_obj2, judge_summary_metadata2 = future_judge_v3.result()
-            judge_results["version_3"] = (
-                judge_summary_obj2, judge_summary_metadata2)
-        except Exception as e:
-            raise SummaryWorkflowError("llm_judge_error", str(e))
-
-        try:
-            ov_resp = future_overview.result()
-            ov_result = ov_resp
-        except ValidationError as e:
-            raise SummaryWorkflowError("llm_invalid_json", str(e))
-        except Exception as e:
-            raise SummaryWorkflowError("llm_overview_error", str(e))
-
-    # Append judge blocks in stable version order
-    for version in ["version_2", "version_3"]:
-        if version in judge_results:
-            obj, meta = judge_results[version]
-            blocks.append(
-                {
-                    "type": "judge",
-                    "metadata": meta,
-                    "data": obj.model_dump()
-                }
-            )
-
-    # Append overview block
-    if ov_result:
-        ov_obj = ov_result.get("overview", {}).get("obj")
-        ov_metadata = ov_result.get("metadata", {})
-        if not ov_obj:
-            raise SummaryWorkflowError(
-                "llm_invalid_json", "LLM did not return a parsed Pydantic object for Overview ")
-
-        validated_overview = ov_obj
-
+    # Handle judge result
+    if "judge" in results and not isinstance(results.get("judge"), Exception):
+        judge_summary_obj, judge_summary_metadata = results["judge"]
+        total_time_sec += (judge_summary_metadata.get("time") or 0)
         blocks.append(
             {
-                "type": "overview",
-                "metadata": ov_metadata,
-                "data": validated_overview.model_dump()
+                "type": "judge",
+                "metadata": judge_summary_metadata,
+                "data": judge_summary_obj.model_dump(),
             }
         )
+    elif "judge" in errors:
+        raise SummaryWorkflowError("llm_judge_error", str(errors["judge"]))
+
+    # Handle overview result
+    if "overview" in results and not isinstance(results.get("overview"), Exception):
+        ov_resp = results["overview"]
+    elif "overview" in errors:
+        raise SummaryWorkflowError(
+            "llm_overview_error", str(errors["overview"]))
+    else:
+        ov_resp = None
+
+    # Append overview block
+    ov_obj = ov_resp.get("overview", {}).get("obj") if ov_resp else None
+    ov_metadata = ov_resp.get("metadata", {}) if ov_resp else {}
+    # finalize total_time and attach to overview metadata
+    total_time_sec += (ov_metadata.get("time") or 0)
+    ov_metadata["total_time"] = round(total_time_sec)
+    if not ov_obj:
+        raise SummaryWorkflowError(
+            "llm_invalid_json", "LLM did not return a parsed Pydantic object for Overview ")
+
+    validated_overview = ov_obj
+
+    blocks.append(
+        {
+            "type": "overview",
+            "metadata": ov_metadata,
+            "data": validated_overview.model_dump()
+        }
+    )
 
     return {
         "title": validated_overview.title if validated_overview else "Untitled",
         "call_type": call_type,
-        "blocks": blocks   # ordem: q_a_* → judge → overvie
+        "blocks": blocks  
     }
 
 

@@ -14,11 +14,11 @@ EFFORT_LEVEL_JUDGE = "medium"
 Q_A_MODEL = "gpt-5"
 LONG_Q_A_PROMPT_VERSION = "version_3"
 SHORT_Q_A_PROMPT_VERSION = "version_5"
-EFFORT_LEVEL_Q_A = "medium"
+EFFORT_LEVEL_Q_A = "minimal"
 
 ####OVERVIEW 
 OVERVIEW_MODEL = "gpt-5-mini"
-OVERVIEW_PROMPT_VERSION = "version_1"
+OVERVIEW_PROMPT_VERSION = "version_2"
 
 
 # Config do PDFProcessor

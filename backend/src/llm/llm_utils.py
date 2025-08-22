@@ -77,6 +77,7 @@ class OverviewOutputFormat(BaseModel):
     title: str
     executives_list: List[Executive]
     overview: str
+    guidance_outlook: Optional[str] = None
 
 
 def load_prompts_summarize():
@@ -151,6 +152,13 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
     summary_text = llm_response.text  # to pass to jduge llm
     summary_obj = llm_response.parsed
 
+    # Round time to 0 decimals for metadata
+    rounded_time = None
+    if llm_response.duration_seconds is not None:
+        rounded_time = round(llm_response.duration_seconds)
+    else:
+        rounded_time = None
+
     metadata = {
 
         "model": model,
@@ -159,10 +167,14 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         "effort_level": effort_level,
         "summary_structure": output_structure,
         "call_type": call_type,
+        "max_output_tokens": max_output_tokens,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
+        "reasoning_tokens": llm_response.reasoning_tokens if model == "gpt-5" else None,
         "finish_reason": llm_response.finish_reason,
         "raw_response": llm_response.raw,  # for debugging
+        "remaining_tokens": llm_response.remaining_tokens,
+        "time": rounded_time,
     }
 
     final_output = {
@@ -202,7 +214,7 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         OUTPUT_STRUCTURE=output_structure)
 
     llm_response = llm_client.generate(
-        
+
         system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
         max_output_tokens=max_output_tokens,
@@ -210,14 +222,25 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         text_format=text_format
     )
 
+    rounded_time = None
+    try:
+        if llm_response.duration_seconds is not None:
+            rounded_time = round(llm_response.duration_seconds)
+    except Exception:
+        rounded_time = None
+
     metadata = {
         "model": model,
         "effort_level": effort_level,
         "prompt_version": prompt_version,
+        "max_output_tokens": max_output_tokens,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
+        "reasoning_tokens": llm_response.reasoning_tokens if model == "gpt-5" else None,
         "finish_reason": llm_response.finish_reason,
         "raw_response": llm_response.raw,  # for debugging
+        "remaining_tokens": llm_response.remaining_tokens,
+        "time": rounded_time,
     }
 
     eval_results_obj = llm_response.parsed
@@ -228,14 +251,14 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         "metadata": metadata
     }
 
-    # print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
+    print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
 
-    # print("Finish reason: ", llm_response.finish_reason)
-    # print("Raw response: ", llm_response.raw)
-    # print("----------------------------------------------------------------------")
-    # print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
-    # print(eval_results_text)
-    # print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
+    print("Finish reason: ", llm_response.finish_reason)
+    print("Raw response: ", llm_response.raw)
+    print("----------------------------------------------------------------------")
+    print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
+    print(eval_results_text)
+    print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
 
     return final_output
 
@@ -266,12 +289,23 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
         text_format=text_format
     )
 
+    rounded_time = None
+    try:
+        if llm_response.duration_seconds is not None:
+            rounded_time = round(llm_response.duration_seconds)
+    except Exception:
+        rounded_time = None
+
     metadata = {
         "model": model,
         "prompt_version": prompt_version,
+        "max_output_tokens": max_output_tokens,
         "input_tokens": llm_response.input_tokens,
         "output_tokens": llm_response.output_tokens,
+        "reasoning_tokens": llm_response.reasoning_tokens if model == "gpt-5" else None,
         "finish_reason": llm_response.finish_reason,
+        "remaining_tokens": llm_response.remaining_tokens,
+        "time": rounded_time,
     }
 
     overview_obj = llm_response.parsed
