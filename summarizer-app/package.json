@@ -14,6 +14,7 @@
     "postinstall": "node -e \"const fs=require('fs'),p=require('path'); const dir='node_modules/expo-module-scripts'; const src=p.join(dir,'tsconfig.base.json'); const dst=p.join(dir,'tsconfig.base'); if(fs.existsSync(src)){try{fs.copyFileSync(src,dst);}catch(e){}}\""
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-clipboard/clipboard": "^1.16.3",
