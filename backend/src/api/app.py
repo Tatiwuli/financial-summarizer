@@ -7,22 +7,51 @@ from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import os
+import logging
+import time
 
 app = FastAPI(title="Summarizer v1")
 
 raw_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
-#ALLOWED_ORIGINS_LOCALHOST = ["http://localhost:8081","http://192.168.15.3:8081"]
+# ALLOWED_ORIGINS_LOCALHOST = ["http://localhost:8081","http://192.168.15.3:8081"]
+
+# Basic logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api")
+logger.info(f"CORS_ORIGINS raw='{raw_origins}', parsed={ALLOWED_ORIGINS}")
 
 
 # Enable CORS for React Native
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS ,  
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Middleware to log request/response and CORS headers for debugging
+@app.middleware("http")
+async def cors_debug_logger(request: Request, call_next):
+    start_time = time.time()
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+    host = request.headers.get("host")
+    xff = request.headers.get("x-forwarded-for")
+    xfp = request.headers.get("x-forwarded-proto")
+    logger.info(
+        f"REQ method={request.method} path={request.url.path} origin={origin} referer={referer} host={host} xff={xff} xfp={xfp}"
+    )
+    response = await call_next(request)
+    aco = response.headers.get("access-control-allow-origin")
+    vary = response.headers.get("vary")
+    duration_ms = int((time.time() - start_time) * 1000)
+    logger.info(
+        f"RES path={request.url.path} status={response.status_code} A-C-Allow-Origin={aco} Vary={vary} durMs={duration_ms}"
+    )
+    return response
 
 
 class ErrorDetail(BaseModel):
