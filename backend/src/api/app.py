@@ -12,13 +12,13 @@ app = FastAPI(title="Summarizer v1")
 
 raw_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
-ALLOWED_ORIGINS_LOCALHOST = ["http://localhost:8081","http://192.168.15.3:8081"]
+#ALLOWED_ORIGINS_LOCALHOST = ["http://localhost:8081","http://192.168.15.3:8081"]
 
 
 # Enable CORS for React Native
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ALLOWED_ORIGINS_LOCALHOST,  
+    allow_origins=ALLOWED_ORIGINS ,  
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

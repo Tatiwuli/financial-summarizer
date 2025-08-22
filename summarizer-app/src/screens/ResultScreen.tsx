@@ -33,6 +33,7 @@ export const ResultScreen = () => {
   const [reportCopied, setReportCopied] = useState(false)
   const [evalCopied, setEvalCopied] = useState(false)
   const [metaCopied, setMetaCopied] = useState(false)
+  const [pdfMessage, setPdfMessage] = useState<string | null>(null)
 
   // --- Data Extraction (Unchanged) ---
   const overviewBlockEntry = result?.blocks.find(
@@ -71,6 +72,10 @@ export const ResultScreen = () => {
       return
     }
     try {
+      // Show interim status and yield to the UI so it can render the message
+      setPdfMessage("Preparing PDF...")
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
       const canvas = await html2canvas(node as unknown as HTMLElement, {
         scale: 2,
         useCORS: true,
@@ -79,9 +84,15 @@ export const ResultScreen = () => {
       const imgData = canvas.toDataURL("image/png")
       const pdf = new jsPDF("p", "px", [canvas.width, canvas.height])
       pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height)
+      setPdfMessage("Starting download...")
+      await new Promise((resolve) => setTimeout(resolve, 0))
       pdf.save("report.pdf")
+      setPdfMessage("PDF downloaded!")
+      setTimeout(() => setPdfMessage(null), 1500)
     } catch (err) {
       console.error("Error generating PDF:", err)
+      setPdfMessage("Failed to generate PDF")
+      setTimeout(() => setPdfMessage(null), 2000)
     }
   }
   // --- Helper Function to write to clipboard ---
@@ -493,6 +504,9 @@ export const ResultScreen = () => {
           <View style={styles.blockHeader}>
             <Text style={styles.blockTitle}>Report</Text>
             <View style={styles.rightActions}>
+              {pdfMessage && (
+                <Text style={styles.copiedText}>{pdfMessage}</Text>
+              )}
               {reportCopied && (
                 <Text style={styles.copiedText}>Copied to clipboard!</Text>
               )}
