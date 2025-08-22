@@ -18,14 +18,120 @@ import {
 } from "../types"
 import Clipboard from "@react-native-clipboard/clipboard"
 import { Ionicons } from "@expo/vector-icons"
+
+import React, { useState, useRef } from "react" // Import useState for collapsibility
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
+
 import React, { useState } from "react" // Import useState for collapsibility
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+
 
 export const ResultScreen = () => {
   const { result, reset } = useSummaryStore()
   const insets = useSafeAreaInsets()
   const [footerHeight, setFooterHeight] = useState(0)
   const [isMetadataVisible, setIsMetadataVisible] = useState(false) // State for Metadata block visibility
+
+  const reportBlockRef = useRef<any>(null)
+  const [reportCopied, setReportCopied] = useState(false)
+  const [evalCopied, setEvalCopied] = useState(false)
+  const [metaCopied, setMetaCopied] = useState(false)
+
+  // --- Data Extraction (Unchanged) ---
+  const overviewBlockEntry = result?.blocks.find(
+    (b: any) => b.type === "overview"
+  )
+  const overviewBlockData = overviewBlockEntry?.data as
+    | OverviewBlockData
+    | undefined
+
+  const qaBlockEntry = result?.blocks.find((b: any) =>
+    b.type.startsWith("q_a_")
+  )
+  const qaBlockData = qaBlockEntry?.data as QaBlockData | undefined
+  const title = result?.title || "Not provided"
+  const judgeBlockEntries = (result?.blocks || []).filter(
+    (b: any) => b.type === "judge"
+  )
+  const judgeBlocks: { data: JudgeBlockData; metadata: any }[] =
+    judgeBlockEntries.map((entry: any) => ({
+      data: entry?.data as JudgeBlockData,
+      metadata: entry?.metadata,
+    }))
+
+  const summaryMeta = qaBlockEntry?.metadata
+  const overviewMeta = overviewBlockEntry?.metadata
+
+  //Helper function to generate a PDF report
+  const handleSavePdf = async () => {
+    if (Platform.OS !== "web") {
+      console.warn("PDF export is currently supported on web only.")
+      return
+    }
+    const node = reportBlockRef.current
+    if (!node) {
+      console.error("Error generating PDF: report container not found")
+      return
+    }
+    try {
+      const canvas = await html2canvas(node as unknown as HTMLElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      })
+      const imgData = canvas.toDataURL("image/png")
+      const pdf = new jsPDF("p", "px", [canvas.width, canvas.height])
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height)
+      pdf.save("report.pdf")
+    } catch (err) {
+      console.error("Error generating PDF:", err)
+    }
+  }
+  // --- Helper Function to write to clipboard ---
+  const copyToClipboard = async (
+    plainText: string,
+    html: string
+  ): Promise<boolean> => {
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined") {
+        // @ts-ignore
+        if (
+          typeof ClipboardItem !== "undefined" &&
+          navigator.clipboard?.write
+        ) {
+          // @ts-ignore
+          const item = new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plainText], { type: "text/plain" }),
+          })
+          // @ts-ignore
+          await navigator.clipboard.write([item])
+          return true
+        }
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(plainText)
+          return true
+        }
+      }
+      Clipboard.setString(plainText)
+      return true
+    } catch (_e) {
+      return false
+    }
+  }
+
+  // --- Block-Specific Copy Handlers ---
+
+  const handleCopyReport = async () => {
+    const parts: string[] = []
+    const htmlParts: string[] = []
+    // Title
+    parts.push(`# ${title}`)
+    htmlParts.push(`<h1>${title}</h1>`)
+
   const [copiedReport, setCopiedReport] = useState(false)
   const [copiedEvaluation, setCopiedEvaluation] = useState(false)
   const [copiedMetadata, setCopiedMetadata] = useState(false)
@@ -100,22 +206,63 @@ export const ResultScreen = () => {
       const execs = overviewBlockData.executives_list
         .map(
           (e) =>
+
+            `* **${e.executive_name || "Not provided"}**: ${
+              e.role || "Not provided"
+            }`
+
             `* **${e.executive_name || "Not provided"}**: ${e.role || "Not provided"}`
+
         )
         .join("\n")
       parts.push(`## Executives\n${execs}`)
 
       htmlParts.push(
+
+        `<h2>Executives</h2><ul>` +
+          overviewBlockData.executives_list
+            .map(
+              (e) =>
+                `<li><strong>${e.executive_name || "Not provided"}</strong>: ${
+                  e.role || "Not provided"
+                }</li>`
         `<h2>Executives</h2>` +
           `<ul>` +
           overviewBlockData.executives_list
             .map(
               (e) =>
                 `<li><strong>${e.executive_name || "Not provided"}</strong>: ${e.role || "Not provided"}</li>`
+
             )
             .join("") +
           `</ul>`
       )
+
+    }
+    // Overview
+    if (overviewBlockData) {
+      parts.push(`## Overview\n${overviewBlockData.overview || "Not provided"}`)
+      htmlParts.push(
+        `<h2>Overview</h2><p>${
+          overviewBlockData.overview || "Not provided"
+        }</p>`
+      )
+      if (overviewBlockData.guidance_outlook) {
+        const lines = overviewBlockData.guidance_outlook
+          .split(/\r?\n+/)
+          .map((l) => l.trim().replace(/^\s*[\-•–—]\s*/, ""))
+          .filter(Boolean)
+        parts.push(
+          `### Guidance & Outlook\n${lines.map((l) => `* ${l}`).join("\n")}`
+        )
+        htmlParts.push(
+          `<h3>Guidance &amp; Outlook</h3><ul>` +
+            lines.map((l) => `<li>${l}</li>`).join("") +
+            `</ul>`
+        )
+      }
+    }
+
     }
 
     // Overview
@@ -140,6 +287,7 @@ export const ResultScreen = () => {
       }
     }
 
+
     // Q&A
     if (qaBlockData) {
       const qaText = qaBlockData.analysts
@@ -149,12 +297,63 @@ export const ResultScreen = () => {
             a.questions
               .map(
                 (q) =>
+
+                  `**Q:** ${q.question || "Not provided"}\n**A:** ${
+                    q.answer_summary || "Not provided"
+                  }`
+
                   `**Q:** ${q.question || "Not provided"}\n**A:** ${q.answer_summary || "Not provided"}`
+
               )
               .join("\n\n")
         )
         .join("\n\n")
       parts.push(`## Q&A\n${qaText}`)
+
+
+      htmlParts.push(
+        `<h2>Q&amp;A</h2>` +
+          qaBlockData.analysts
+            .map(
+              (a) =>
+                `<h3>${a.name || "Not provided"} - ${
+                  a.firm || "Not provided"
+                }</h3>` +
+                `<ul>` +
+                a.questions
+                  .map(
+                    (q) =>
+                      `<li><strong>Q:</strong> ${
+                        q.question || "Not provided"
+                      }<br/><strong>A:</strong> ${
+                        q.answer_summary || "Not provided"
+                      }</li>`
+                  )
+                  .join("") +
+                `</ul>`
+            )
+            .join("")
+      )
+    }
+    const plain = parts.join("\n\n")
+    const html = `<div>${htmlParts.join("")}</div>`
+    const ok = await copyToClipboard(plain, html)
+    if (ok) {
+      setReportCopied(true)
+      setTimeout(() => setReportCopied(false), 1500)
+    }
+  }
+
+  const handleCopyEvaluation = async () => {
+    const parts: string[] = []
+    const htmlParts: string[] = []
+    judgeBlocks.forEach(({ data }) => {
+      const oa = data.overall_assessment
+      const overall = `**Status:** ${
+        oa.overall_passed ? "✅ Passed" : "❌ Failed"
+      }\n**Score:** ${oa.passed_criteria}/${oa.total_criteria}\n\n${
+        oa.evaluation_summary || "Not provided"
+      }`
 
       const qaHtml = qaBlockData.analysts
         .map((a) => {
@@ -189,12 +388,183 @@ export const ResultScreen = () => {
     judgeBlocks.forEach(({ data }) => {
       const oa = data.overall_assessment
       const overall = `**Status:** ${oa.overall_passed ? "✅ Passed" : "❌ Failed"}\n**Score:** ${oa.passed_criteria}/${oa.total_criteria}\n\n${oa.evaluation_summary || "Not provided"}`
+
       parts.push(`## Overall assessment\n${overall}`)
 
       htmlParts.push(
         `<h2>Overall assessment</h2>` +
+
+          `<p><strong>Status:</strong> ${
+            oa.overall_passed ? "✅ Passed" : "❌ Failed"
+          }<br/><strong>Score:</strong> ${oa.passed_criteria}/${
+            oa.total_criteria
+          }</p>` +
+          `<p>${oa.evaluation_summary || "Not provided"}</p>`
+      )
+
+      if (data.evaluation_results?.some((m) => m.errors?.length)) {
+        const header = `| Metric | Error | Transcript Source | Summary Source |\n|---|---|---|---|`
+        const rows = data.evaluation_results
+          .flatMap((metric) =>
+            (metric.errors || []).map(
+              (err) =>
+                `| ${metric.metric_name || "N/A"} | ${err.error || "N/A"} | ${
+                  err.transcript_text || "N/A"
+                } | ${err.summary_text || "N/A"} |`
+            )
+          )
+          .join("\n")
+        parts.push(`## Evaluation Results\n${header}\n${rows}`)
+
+        const htmlRows = data.evaluation_results
+          .flatMap((metric) =>
+            (metric.errors || []).map(
+              (err) =>
+                `<tr><td>${metric.metric_name || "N/A"}</td><td>${
+                  err.error || "N/A"
+                }</td><td>${err.transcript_text || "N/A"}</td><td>${
+                  err.summary_text || "N/A"
+                }</td></tr>`
+            )
+          )
+          .join("")
+        htmlParts.push(
+          `<h2>Evaluation Results</h2>` +
+            `<table border="1" cellspacing="0" cellpadding="4">` +
+            `<thead><tr><th>Metric</th><th>Error</th><th>Transcript Source</th><th>Summary Source</th></tr></thead>` +
+            `<tbody>${htmlRows}</tbody>` +
+            `</table>`
+        )
+      }
+    })
+    const plain = parts.join("\n\n----------\n\n")
+    const html = `<div>${htmlParts.join("<hr/>")}</div>`
+    const ok = await copyToClipboard(plain, html)
+    if (ok) {
+      setEvalCopied(true)
+      setTimeout(() => setEvalCopied(false), 1500)
+    }
+  }
+
+  const handleCopyMetadata = async () => {
+    const parts: string[] = []
+    const htmlParts: string[] = []
+    const durations: string[] = []
+    const tokens: string[] = []
+
+    // Durations
+    durations.push(
+      `**Summarize Q&A duration:** ${summaryMeta?.time ?? "Not provided"}`
+    )
+    const htmlDurations: string[] = []
+    htmlDurations.push(
+      `<li><strong>Summarize Q&amp;A duration:</strong> ${
+        summaryMeta?.time ?? "Not provided"
+      }</li>`
+    )
+    judgeBlocks.forEach(({ metadata }, i) => {
+      durations.push(
+        `**Evaluating Q&A Summary duration ${i + 1}:** ${
+          metadata?.time ?? "Not provided"
+        }`
+      )
+      htmlDurations.push(
+        `<li><strong>Evaluating Q&amp;A Summary duration ${i + 1}:</strong> ${
+          metadata?.time ?? "Not provided"
+        }</li>`
+      )
+    })
+    durations.push(
+      `**Generate Overview duration:** ${overviewMeta?.time ?? "Not provided"}`
+    )
+    htmlDurations.push(
+      `<li><strong>Generate Overview duration:</strong> ${
+        overviewMeta?.time ?? "Not provided"
+      }</li>`
+    )
+
+    // Tokens
+    if (summaryMeta) {
+      tokens.push(
+        `**Summarize Q&A total tokens:** ${
+          summaryMeta.input_tokens + summaryMeta.output_tokens || "Not provided"
+        }\nModel: ${
+          summaryMeta.model || "Not provided"
+        }\nEffort-level:\n- Input: ${
+          summaryMeta.input_tokens || "Not provided"
+        }\n- Output: ${summaryMeta.output_tokens || "Not provided"} ${
+          summaryMeta.reasoning ? `(reasoning: ${summaryMeta.reasoning})` : ""
+        }`
+      )
+    }
+    const htmlTokens: string[] = []
+    if (summaryMeta) {
+      htmlTokens.push(
+        `<li><strong>Summarize Q&amp;A total tokens:</strong> ${
+          (summaryMeta.input_tokens ?? 0) + (summaryMeta.output_tokens ?? 0)
+        }</li>`,
+        `<li>Model: ${summaryMeta.model || "Not provided"}</li>`,
+        `<li>Effort-level:</li>`,
+        `<li style="margin-left:16px">- Input: ${
+          summaryMeta.input_tokens || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">- Output: ${
+          summaryMeta.output_tokens || "Not provided"
+        } ${
+          summaryMeta.reasoning ? `(reasoning: ${summaryMeta.reasoning})` : ""
+        }</li>`
+      )
+    }
+    judgeBlocks.forEach(({ metadata }, i) => {
+      if (metadata) {
+        tokens.push(
+          `**Evaluating Q&A Summary duration ${i + 1}:**\nModel: ${
+            metadata.model || "Not provided"
+          }\nEffort-level:\n- Input: ${
+            metadata.input_tokens || "Not provided"
+          }\n- Output: ${metadata.output_tokens || "Not provided"}`
+        )
+        htmlTokens.push(
+          `<li><strong>Evaluating Q&amp;A Summary ${i + 1}:</strong></li>`,
+          `<li style="margin-left:16px">Model: ${
+            metadata.model || "Not provided"
+          }</li>`,
+          `<li style="margin-left:16px">- Input: ${
+            metadata.input_tokens || "Not provided"
+          }</li>`,
+          `<li style="margin-left:16px">- Output: ${
+            metadata.output_tokens || "Not provided"
+          }</li>`
+        )
+      }
+    })
+    if (overviewMeta) {
+      tokens.push(
+        `**Generate Overview duration:**\nModel: ${
+          overviewMeta.model || "Not provided"
+        }\nEffort-level:\n- Input: ${
+          overviewMeta.input_tokens || "Not provided"
+        }\n- Output: ${overviewMeta.output_tokens || "Not provided"} ${
+          overviewMeta.reasoning ? `(reasoning: ${overviewMeta.reasoning})` : ""
+        }`
+      )
+      htmlTokens.push(
+        `<li><strong>Generate Overview:</strong></li>`,
+        `<li style="margin-left:16px">Model: ${
+          overviewMeta.model || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">- Input: ${
+          overviewMeta.input_tokens || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">- Output: ${
+          overviewMeta.output_tokens || "Not provided"
+        } ${
+          overviewMeta.reasoning ? `(reasoning: ${overviewMeta.reasoning})` : ""
+        }</li>`
+
           `<p><strong>Status:</strong> ${oa.overall_passed ? "✅ Passed" : "❌ Failed"}<br/><strong>Score:</strong> ${oa.passed_criteria}/${oa.total_criteria}</p>` +
           `<p>${oa.evaluation_summary || "Not provided"}</p>`
+
       )
 
       if (data.evaluation_results?.some((m) => m.errors?.length)) {
@@ -333,6 +703,22 @@ export const ResultScreen = () => {
       setCopiedMetadata(true)
       setTimeout(() => setCopiedMetadata(false), 1500)
     }
+    parts.push(`### Total Duration\n${durations.join("\n")}`)
+    parts.push(`### Total Tokens\n${tokens.join("\n\n")}`)
+
+    const plain = parts.join("\n\n")
+    const html = `<div>
+      <h3>Total Duration</h3>
+      <ul>${htmlDurations.join("")}</ul>
+      <h3>Total Tokens</h3>
+      <ul>${htmlTokens.join("")}</ul>
+    </div>`
+    const ok = await copyToClipboard(plain, html)
+    if (ok) {
+      setMetaCopied(true)
+      setTimeout(() => setMetaCopied(false), 1500)
+    }
+
   }
 
   if (!result) {
@@ -358,6 +744,26 @@ export const ResultScreen = () => {
         ]}
       >
         {/* --- Report Block --- */}
+
+        <View style={styles.blockContainer} ref={reportBlockRef}>
+          <View style={styles.blockHeader}>
+            <Text style={styles.blockTitle}>Report</Text>
+            <View style={styles.rightActions}>
+              {reportCopied && (
+                <Text style={styles.copiedText}>Copied to clipboard!</Text>
+              )}
+              <TouchableOpacity onPress={handleCopyReport}>
+                <Ionicons name="copy-outline" size={30} color="#007AFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSavePdf}
+                style={styles.iconButton}
+              >
+                <Ionicons name="save-outline" size={30} color="rgb(255 0 0)" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
         <View style={styles.blockContainer}>
           <View style={styles.blockHeader}>
             <Text style={styles.blockTitle}>Report</Text>
@@ -368,6 +774,7 @@ export const ResultScreen = () => {
           {copiedReport && (
             <Text style={styles.copiedText}>Copied to the clipboard!</Text>
           )}
+
           <Text style={styles.h1}>{title}</Text>
           <Text style={styles.h2}>Executives</Text>
           {overviewBlockData?.executives_list?.length ? (
@@ -389,6 +796,7 @@ export const ResultScreen = () => {
             {overviewBlockData?.overview || "Not provided"}
           </Text>
 
+
           <Text style={styles.h3}>Guidance & Outlook</Text>
           {overviewBlockData?.guidance_outlook ? (
             overviewBlockData.guidance_outlook
@@ -403,6 +811,24 @@ export const ResultScreen = () => {
           ) : (
             <Text style={styles.bodyText}>Not provided</Text>
           )}
+
+
+
+          <Text style={styles.h3}>Guidance & Outlook</Text>
+          {overviewBlockData?.guidance_outlook ? (
+            overviewBlockData.guidance_outlook
+              .split(/\r?\n+/)
+              .map((l) => l.trim().replace(/^\s*[\-•–—]\s*/, ""))
+              .filter(Boolean)
+              .map((item, index) => (
+                <Text key={index} style={styles.bulletItem}>
+                  • {item}
+                </Text>
+              ))
+          ) : (
+            <Text style={styles.bodyText}>Not provided</Text>
+          )}
+
 
           <Text style={styles.h2}>Q&A</Text>
           {qaBlockData?.analysts?.length ? (
@@ -437,6 +863,17 @@ export const ResultScreen = () => {
         <View style={styles.blockContainer}>
           <View style={styles.blockHeader}>
             <Text style={styles.blockTitle}>Evaluation</Text>
+
+            <View style={styles.rightActions}>
+              {evalCopied && (
+                <Text style={styles.copiedText}>Copied to clipboard!</Text>
+              )}
+              <TouchableOpacity onPress={handleCopyEvaluation}>
+                <Ionicons name="copy-outline" size={30} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
             <TouchableOpacity onPress={handleCopyEvaluation}>
               <Ionicons name="copy-outline" size={34} color="#007AFF" />
             </TouchableOpacity>
@@ -444,6 +881,7 @@ export const ResultScreen = () => {
           {copiedEvaluation && (
             <Text style={styles.copiedText}>Copied to the clipboard!</Text>
           )}
+
           {judgeBlocks.map(({ data }, idx) => (
             <View key={`judge-${idx}`}>
               <Text style={styles.h2}>Evaluation Results</Text>
@@ -511,12 +949,24 @@ export const ResultScreen = () => {
             onPress={() => setIsMetadataVisible(!isMetadataVisible)}
           >
             <Text style={styles.blockTitle}>Metadata</Text>
+
+            
+            <View style={styles.rightActions}>
+              {metaCopied && (
+                <Text style={styles.copiedText}>Copied to clipboard!</Text>
+              )}
+
             <View style={{ flexDirection: "row", alignItems: "center" }}>
+
               <TouchableOpacity
                 onPress={handleCopyMetadata}
                 style={{ marginRight: 8 }}
               >
+
+                <Ionicons name="copy-outline" size={30} color="#007AFF" />
+
                 <Ionicons name="copy-outline" size={34} color="#007AFF" />
+
               </TouchableOpacity>
               <Ionicons
                 name={
@@ -524,15 +974,19 @@ export const ResultScreen = () => {
                     ? "chevron-up-outline"
                     : "chevron-down-outline"
                 }
+
+                size={30}
+
                 size={24}
+
                 color="#3C3C43"
               />
             </View>
           </TouchableOpacity>
+
           {copiedMetadata && (
             <Text style={styles.copiedText}>Copied to the clipboard!</Text>
           )}
-
           {isMetadataVisible && (
             <View style={{ marginTop: 10 }}>
               <Text style={styles.h3}>Total Duration</Text>
@@ -655,6 +1109,20 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "bold",
   },
+
+  rightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  copiedText: {
+    color: "#34C759",
+    marginRight: 10,
+    fontSize: 14,
+  },
+  iconButton: {
+    marginLeft: 12,
+  },
+
   copiedText: {
     alignSelf: "flex-end",
     marginTop: -6,
@@ -662,6 +1130,7 @@ const styles = StyleSheet.create({
     color: "rgb(0 0 0)",
     fontSize: 14,
   },
+
   h1: { fontSize: 26, fontWeight: "bold", marginBottom: 15 },
   h2: { fontSize: 20, fontWeight: "600", marginTop: 15, marginBottom: 8 },
   h3: { fontSize: 18, fontWeight: "600", marginTop: 12, marginBottom: 6 },

@@ -18,20 +18,18 @@ const App = () => {
   const status = useSummaryStore((state) => state.status)
   console.log("[AppNavigator] Status:", status)
 
-  // Renderização condicional baseada no status
-  return (
-    <SafeAreaProvider>
-      {status === "loading" ? (
-        <LoadingScreen />
-      ) : status === "success" ? (
-        <ResultScreen />
-      ) : (
-        // Os estados 'idle' e 'error' mostram a tela de upload.
-        // A própria UploadScreen já mostra a mensagem de erro.
-        <UploadScreen />
-      )}
-    </SafeAreaProvider>
-  )
+  let content: React.ReactNode
+  if (status === "loading") {
+    content = <LoadingScreen />
+  } else if (status === "success") {
+    content = <ResultScreen />
+  } else {
+    // Os estados 'idle' e 'error' mostram a tela de upload.
+    // A própria UploadScreen já mostra a mensagem de erro.
+    content = <UploadScreen />
+  }
+
+        return <SafeAreaProvider>{content}</SafeAreaProvider>
 }
 
 export default App
