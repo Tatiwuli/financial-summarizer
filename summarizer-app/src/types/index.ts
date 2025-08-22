@@ -24,6 +24,7 @@ export interface OverviewBlockData {
   title: string
   executives_list: Array<{ executive_name: string; role: string }>
   overview: string
+  guidance_outlook: string
 }
 
 // Defines the shape of the data inside a 'judge' block

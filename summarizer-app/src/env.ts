@@ -11,16 +11,23 @@ const apiFromEnv =
     ? (process.env as Record<string, string | undefined>).EXPO_PUBLIC_API_URL
     : undefined) || undefined
 
+// Treat empty strings as missing so we can fall back correctly
+const pick = (v?: string) => (v && v.trim() !== "" ? v : undefined)
+
 const raw =
-  apiFromConfig ??
-  apiFromEnv ??
+  pick(apiFromConfig) ??
+  pick(apiFromEnv) ??
   (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "")
 
 // Trim any trailing slashes so requests don’t become //health
 export const API_BASE = raw.replace(/\/+$/, "")
 
+
+
 if (!API_BASE) {
-  throw new Error("EXPO_PUBLIC_API_URL is required for API base URL")
+  throw new Error(
+    "API base URL is required. Set EXPO_PUBLIC_API_URL or extra.API_URL"
+  )
 }
 
 if (
