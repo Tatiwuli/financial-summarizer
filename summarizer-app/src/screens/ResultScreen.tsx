@@ -290,41 +290,60 @@ export const ResultScreen = () => {
     }
   }
 
+  // Helper function to format seconds as mm:ss
+  const formatDuration = (seconds: number | null | undefined): string => {
+    if (seconds == null) return "Not provided"
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`
+  }
+
   const handleCopyMetadata = async () => {
     const parts: string[] = []
     const htmlParts: string[] = []
     const durations: string[] = []
     const tokens: string[] = []
 
+    // Calculate total duration
+    const totalSeconds =
+      (summaryMeta?.time ?? 0) +
+      judgeBlocks.reduce(
+        (sum, { metadata }) => sum + (metadata?.time ?? 0),
+        0
+      ) +
+      (overviewMeta?.time ?? 0)
+
     // Durations
     durations.push(
-      `**Summarize Q&A duration:** ${summaryMeta?.time ?? "Not provided"}`
+      `**Summarize Q&A duration:** ${formatDuration(summaryMeta?.time)}`
     )
     const htmlDurations: string[] = []
     htmlDurations.push(
-      `<li><strong>Summarize Q&amp;A duration:</strong> ${
-        summaryMeta?.time ?? "Not provided"
-      }</li>`
+      `<li><strong>Summarize Q&amp;A duration:</strong> ${formatDuration(
+        summaryMeta?.time
+      )}</li>`
     )
     judgeBlocks.forEach(({ metadata }, i) => {
       durations.push(
-        `**Evaluating Q&A Summary duration ${i + 1}:** ${
-          metadata?.time ?? "Not provided"
-        }`
+        `**Evaluating Q&A Summary duration ${i + 1}:** ${formatDuration(
+          metadata?.time
+        )}`
       )
       htmlDurations.push(
-        `<li><strong>Evaluating Q&amp;A Summary duration ${i + 1}:</strong> ${
-          metadata?.time ?? "Not provided"
-        }</li>`
+        `<li><strong>Evaluating Q&amp;A Summary duration ${
+          i + 1
+        }:</strong> ${formatDuration(metadata?.time)}</li>`
       )
     })
     durations.push(
-      `**Generate Overview duration:** ${overviewMeta?.time ?? "Not provided"}`
+      `**Generate Overview duration:** ${formatDuration(overviewMeta?.time)}`
     )
     htmlDurations.push(
-      `<li><strong>Generate Overview duration:</strong> ${
-        overviewMeta?.time ?? "Not provided"
-      }</li>`
+      `<li><strong>Generate Overview duration:</strong> ${formatDuration(
+        overviewMeta?.time
+      )}</li>`
     )
 
     // Tokens
@@ -332,12 +351,14 @@ export const ResultScreen = () => {
       tokens.push(
         `**Summarize Q&A total tokens:** ${
           summaryMeta.input_tokens + summaryMeta.output_tokens || "Not provided"
-        }\nModel: ${
-          summaryMeta.model || "Not provided"
-        }\nEffort-level:\n- Input: ${
-          summaryMeta.input_tokens || "Not provided"
-        }\n- Output: ${summaryMeta.output_tokens || "Not provided"} ${
-          summaryMeta.reasoning ? `(reasoning: ${summaryMeta.reasoning})` : ""
+        }\nModel: ${summaryMeta.model || "Not provided"}\nEffort-level: ${
+          summaryMeta.effort_level || "Not provided"
+        }\n- Input: ${summaryMeta.input_tokens || "Not provided"}\n- Output: ${
+          summaryMeta.output_tokens || "Not provided"
+        } ${
+          summaryMeta.reasoning_tokens
+            ? `(reasoning: ${summaryMeta.reasoning_tokens})`
+            : ""
         }`
       )
     }
@@ -348,30 +369,37 @@ export const ResultScreen = () => {
           (summaryMeta.input_tokens ?? 0) + (summaryMeta.output_tokens ?? 0)
         }</li>`,
         `<li>Model: ${summaryMeta.model || "Not provided"}</li>`,
-        `<li>Effort-level:</li>`,
+        `<li>Effort-level: ${summaryMeta.effort_level || "Not provided"}</li>`,
         `<li style="margin-left:16px">- Input: ${
           summaryMeta.input_tokens || "Not provided"
         }</li>`,
         `<li style="margin-left:16px">- Output: ${
           summaryMeta.output_tokens || "Not provided"
         } ${
-          summaryMeta.reasoning ? `(reasoning: ${summaryMeta.reasoning})` : ""
+          summaryMeta.reasoning_tokens
+            ? `(reasoning: ${summaryMeta.reasoning_tokens})`
+            : ""
         }</li>`
       )
     }
     judgeBlocks.forEach(({ metadata }, i) => {
       if (metadata) {
         tokens.push(
-          `**Evaluating Q&A Summary duration ${i + 1}:**\nModel: ${
+          `**Evaluating Q&A Summary ${i + 1}:**\nModel: ${
             metadata.model || "Not provided"
-          }\nEffort-level:\n- Input: ${
-            metadata.input_tokens || "Not provided"
-          }\n- Output: ${metadata.output_tokens || "Not provided"}`
+          }\nEffort-level: ${
+            metadata.effort_level || "Not provided"
+          }\n- Input: ${metadata.input_tokens || "Not provided"}\n- Output: ${
+            metadata.output_tokens || "Not provided"
+          }`
         )
         htmlTokens.push(
           `<li><strong>Evaluating Q&amp;A Summary ${i + 1}:</strong></li>`,
           `<li style="margin-left:16px">Model: ${
             metadata.model || "Not provided"
+          }</li>`,
+          `<li style="margin-left:16px">Effort-level: ${
+            metadata.effort_level || "Not provided"
           }</li>`,
           `<li style="margin-left:16px">- Input: ${
             metadata.input_tokens || "Not provided"
@@ -384,12 +412,16 @@ export const ResultScreen = () => {
     })
     if (overviewMeta) {
       tokens.push(
-        `**Generate Overview duration:**\nModel: ${
+        `**Generate Overview:**\nModel: ${
           overviewMeta.model || "Not provided"
-        }\nEffort-level:\n- Input: ${
-          overviewMeta.input_tokens || "Not provided"
-        }\n- Output: ${overviewMeta.output_tokens || "Not provided"} ${
-          overviewMeta.reasoning ? `(reasoning: ${overviewMeta.reasoning})` : ""
+        }\nEffort-level: ${
+          overviewMeta.effort_level || "Not provided"
+        }\n- Input: ${overviewMeta.input_tokens || "Not provided"}\n- Output: ${
+          overviewMeta.output_tokens || "Not provided"
+        } ${
+          overviewMeta.reasoning_tokens
+            ? `(reasoning: ${overviewMeta.reasoning_tokens})`
+            : ""
         }`
       )
       htmlTokens.push(
@@ -397,23 +429,32 @@ export const ResultScreen = () => {
         `<li style="margin-left:16px">Model: ${
           overviewMeta.model || "Not provided"
         }</li>`,
+        `<li style="margin-left:16px">Effort-level: ${
+          overviewMeta.effort_level || "Not provided"
+        }</li>`,
         `<li style="margin-left:16px">- Input: ${
           overviewMeta.input_tokens || "Not provided"
         }</li>`,
         `<li style="margin-left:16px">- Output: ${
           overviewMeta.output_tokens || "Not provided"
         } ${
-          overviewMeta.reasoning ? `(reasoning: ${overviewMeta.reasoning})` : ""
+          overviewMeta.reasoning_tokens
+            ? `(reasoning: ${overviewMeta.reasoning_tokens})`
+            : ""
         }</li>`
       )
     }
 
-    parts.push(`### Total Duration\n${durations.join("\n")}`)
+    parts.push(
+      `### Total Duration (${formatDuration(totalSeconds)})\n${durations.join(
+        "\n"
+      )}`
+    )
     parts.push(`### Total Tokens\n${tokens.join("\n\n")}`)
 
     const plain = parts.join("\n\n")
     const html = `<div>
-      <h3>Total Duration</h3>
+      <h3>Total Duration (${formatDuration(totalSeconds)})</h3>
       <ul>${htmlDurations.join("")}</ul>
       <h3>Total Tokens</h3>
       <ul>${htmlTokens.join("")}</ul>
@@ -635,22 +676,35 @@ export const ResultScreen = () => {
 
           {isMetadataVisible && (
             <View style={{ marginTop: 10 }}>
-              <Text style={styles.h3}>Total Duration</Text>
+              {(() => {
+                const totalSeconds =
+                  (summaryMeta?.time ?? 0) +
+                  judgeBlocks.reduce(
+                    (sum, { metadata }) => sum + (metadata?.time ?? 0),
+                    0
+                  ) +
+                  (overviewMeta?.time ?? 0)
+                return (
+                  <Text style={styles.h3}>
+                    Total Duration ({formatDuration(totalSeconds)})
+                  </Text>
+                )
+              })()}
               <Text style={styles.bodyText}>
                 <Text style={styles.boldText}>Summarize Q&A duration:</Text>{" "}
-                {summaryMeta?.time ?? "Not provided"}
+                {formatDuration(summaryMeta?.time)}
               </Text>
               {judgeBlocks.map(({ metadata }, i) => (
                 <Text key={i} style={styles.bodyText}>
                   <Text style={styles.boldText}>
-                    Evaluating Q&A Summary duration:
+                    Evaluating Q&A Summary duration {i + 1}:
                   </Text>{" "}
-                  {metadata?.time ?? "Not provided"}
+                  {formatDuration(metadata?.time)}
                 </Text>
               ))}
               <Text style={styles.bodyText}>
                 <Text style={styles.boldText}>Generate Overview duration:</Text>{" "}
-                {overviewMeta?.time ?? "Not provided"}
+                {formatDuration(overviewMeta?.time)}
               </Text>
 
               <Text style={styles.h3}>Total Tokens</Text>
@@ -666,14 +720,16 @@ export const ResultScreen = () => {
                 <Text style={styles.metadataDetail}>
                   Model: {summaryMeta?.model ?? "Not provided"}
                 </Text>
-                <Text style={styles.metadataDetail}>Effort-level:</Text>
+                <Text style={styles.metadataDetail}>
+                  Effort-level: {summaryMeta?.effort_level ?? "Not provided"}
+                </Text>
                 <Text style={styles.metadataNested}>
                   - Input: {summaryMeta?.input_tokens ?? "Not provided"}
                 </Text>
                 <Text style={styles.metadataNested}>
                   - Output: {summaryMeta?.output_tokens ?? "Not provided"}{" "}
-                  {summaryMeta?.reasoning
-                    ? `(reasoning: ${summaryMeta.reasoning})`
+                  {summaryMeta?.reasoning_tokens
+                    ? `(reasoning: ${summaryMeta.reasoning_tokens})`
                     : ""}
                 </Text>
               </View>
@@ -681,12 +737,16 @@ export const ResultScreen = () => {
               {judgeBlocks.map(({ metadata }, i) => (
                 <View key={i} style={styles.metadataSection}>
                   <Text style={styles.bodyText}>
-                    <Text style={styles.boldText}>Evaluating Q&A Summary:</Text>
+                    <Text style={styles.boldText}>
+                      Evaluating Q&A Summary {i + 1}:
+                    </Text>
                   </Text>
                   <Text style={styles.metadataDetail}>
                     Model: {metadata?.model ?? "Not provided"}
                   </Text>
-                  <Text style={styles.metadataDetail}>Effort-level:</Text>
+                  <Text style={styles.metadataDetail}>
+                    Effort-level: {metadata?.effort_level ?? "Not provided"}
+                  </Text>
                   <Text style={styles.metadataNested}>
                     - Input: {metadata?.input_tokens ?? "Not provided"}
                   </Text>
@@ -703,14 +763,16 @@ export const ResultScreen = () => {
                 <Text style={styles.metadataDetail}>
                   Model: {overviewMeta?.model ?? "Not provided"}
                 </Text>
-                <Text style={styles.metadataDetail}>Effort-level:</Text>
+                <Text style={styles.metadataDetail}>
+                  Effort-level: {overviewMeta?.effort_level ?? "Not provided"}
+                </Text>
                 <Text style={styles.metadataNested}>
                   - Input: {overviewMeta?.input_tokens ?? "Not provided"}
                 </Text>
                 <Text style={styles.metadataNested}>
                   - Output: {overviewMeta?.output_tokens ?? "Not provided"}{" "}
-                  {overviewMeta?.reasoning
-                    ? `(reasoning: ${overviewMeta.reasoning})`
+                  {overviewMeta?.reasoning_tokens
+                    ? `(reasoning: ${overviewMeta.reasoning_tokens})`
                     : ""}
                 </Text>
               </View>
