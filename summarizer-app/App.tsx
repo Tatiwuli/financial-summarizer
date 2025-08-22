@@ -29,7 +29,7 @@ const App = () => {
     content = <UploadScreen />
   }
 
-  return <SafeAreaProvider>{content}</SafeAreaProvider>
+        return <SafeAreaProvider>{content}</SafeAreaProvider>
 }
 
 export default App

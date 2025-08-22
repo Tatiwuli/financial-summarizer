@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "dev": "expo start --web",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web",
+    "postinstall": "node -e \"const fs=require('fs'),p=require('path'); const dir='node_modules/expo-module-scripts'; const src=p.join(dir,'tsconfig.base.json'); const dst=p.join(dir,'tsconfig.base'); if(fs.existsSync(src)){try{fs.copyFileSync(src,dst);}catch(e){}}\""
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -55,6 +56,7 @@
     "@types/react": "~19.0.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "expo-module-scripts": "^4.1.10",
     "typescript": "~5.8.3"
   },
   "private": true

@@ -70,17 +70,15 @@ Constrains effort on reasoning for reasoning models. Currently supported values 
 ------------------
 ✏️TODO
 
-- Mudar pre-check e summarize endpoints para POST ✅
-- Editar run_precheck e run_summary_workflow para receber user inpputs dos endpoints ✅
+EXPERIEMNTOS PRA DIMINUIR LATENCIA: ASYNC NO prompt judge e prompt overview; 
+- compress prompt - transcript ( ver ser tem API)
+- testar com differentes effort level 
+-----------------------------------
+- Prompt pra conference call
+- Mudar logica do precheck: permitir queQ&A nao eh identificado ( ou curto) mas tem presentation. E vice-versa. O erro seria quando nao tiver nem Q&A nem presentation 
+- Processar transcripts de sources diferentes 
 
 
-
-
-================= DEBUG =============
-
-------------------------
- retornar metrics tbm e append no blocks. Agora so apendamos o texto 
-- EXPEERIMENTOS PRA DIMINUIR A LATENCIA. 
 
 - Fucao que verifica se o pdf  do transcript ja existe  ou nao 
 -- Padronizar as mensagens de erro gerado pelopdf processor. Agora, essas mensagens sao passadas para precheck, mas hardcoded. 
