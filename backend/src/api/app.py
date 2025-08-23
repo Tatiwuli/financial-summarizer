@@ -25,11 +25,12 @@ logger.info(f"CORS_ORIGINS raw='{raw_origins}', parsed={ALLOWED_ORIGINS}")
 # Enable CORS for React Native
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=False,
+    allow_origin_regex=r"^https:\/\/financial-summarizer-git-.*-tatiane-wu-lis-projects\.vercel\.app$",
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=False,
 )
+
 
 
 # Middleware to log request/response and CORS headers for debugging
