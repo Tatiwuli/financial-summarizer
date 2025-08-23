@@ -27,8 +27,16 @@ class PDFProcessor:
         self.transcripts_dir = Path(transcripts_dir)
         self.transcripts_dir.mkdir(exist_ok=True)
         self.qa_patterns = [
-            "Questions and Answers", "Question and Answer",
-            "QUESTIONS AND ANSWERS", "QUESTION AND ANSWER"
+            "Questions and Answers",
+            "Question and Answer",
+            "Questions & Answers",
+            "Question & Answer",
+            "Q&A",
+            "Q & A",
+            "Q and A",
+            "Q&A Session",
+            "Q and A Session",
+            "Analyst Q&A",
         ]
 
 # ------------------ FUNCTIONS UTILITIES ------------------------------------------------
@@ -126,11 +134,13 @@ class PDFProcessor:
             self.qa_patterns = [
                 "Questions and Answers",
                 "Question and Answer",
-                "QUESTIONS AND ANSWERS",
-                "QUESTION AND ANSWER"
+                "Questions & Answers",
+                "Question & Answer",
+                "Q&A",
+                "Q & A"
             ]
 
-            min_title_font_size = body_font_size * 1.2
+            min_title_font_size = body_font_size
 
             # Search from the last page to the first to avoid table of contents
             for page_num in range(len(doc) - 1, -1, -1):
@@ -142,20 +152,36 @@ class PDFProcessor:
                         for line in block["lines"]:
                             line_text = ""
                             line_font_sizes = []
+                            line_fonts: List[str] = []
 
                             for span in line["spans"]:
                                 line_text += span["text"]
                                 line_font_sizes.append(span["size"])
+                                # Collect font names to infer bold
+                                font_name = str(span.get("font", "")).lower()
+                                if font_name:
+                                    line_fonts.append(font_name)
 
                             line_text = line_text.strip()
 
-                            # Check if line matches Q&A patterns
+                            # Infer bold / heading-like
+                            is_bold = any(
+                                ("bold" in f or "heavy" in f) for f in line_fonts
+                            )
+
+                            # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
-                                if pattern in line_text:
-                                    # Check if font size is larger than body text
-                                    if line_font_sizes and max(line_font_sizes) >= min_title_font_size:
-                                        doc.close()
-                                        return page_num
+                                if re.search(re.escape(pattern), line_text, flags=re.IGNORECASE):
+                                    if line_font_sizes:
+                                        max_size = max(line_font_sizes)
+                                        # Accept if strictly larger than body, or equal-size within epsilon but bold/heading-like
+                                        epsilon = 0.2
+                                        if max_size > (min_title_font_size + epsilon) or (
+                                            abs(max_size - min_title_font_size) <= epsilon and (
+                                                is_bold)
+                                        ):
+                                            doc.close()
+                                            return page_num
 
             doc.close()
             return None
@@ -197,8 +223,10 @@ class PDFProcessor:
                 page_text = page.get_text()
 
                 qa_start_index = -1
+                lowered_page_text = page_text.lower()
                 for pattern in self.qa_patterns:
-                    found_index = page_text.find(pattern)
+                    # case-insensitive search- need to check if this is reliable
+                    found_index = lowered_page_text.find(pattern.lower())
                     if found_index != -1:
                         if qa_start_index == -1 or found_index < qa_start_index:
                             qa_start_index = found_index
