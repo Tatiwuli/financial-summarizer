@@ -570,9 +570,15 @@ export const ResultScreen = () => {
           )}
 
           <Text style={styles.h2}>Overview</Text>
-          <Text style={styles.bodyText}>
-            {overviewBlockData?.overview || "Not provided"}
-          </Text>
+          {overviewBlockData ? (
+            <Text style={styles.bodyText}>
+              {overviewBlockData.overview || "Not provided"}
+            </Text>
+          ) : (
+            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
+              Overview unavailable
+            </Text>
+          )}
 
           <Text style={styles.h3}>Guidance & Outlook</Text>
           {overviewBlockData?.guidance_outlook &&
@@ -595,7 +601,7 @@ export const ResultScreen = () => {
               return (
                 <View>
                   {entries.map(([period, items], idx) => (
-                    <View key={`${period}-${idx}`} style={{ marginBottom: 8}}>
+                    <View key={`${period}-${idx}`} style={{ marginBottom: 8 }}>
                       <Text style={styles.boldText}> {period} </Text>
                       {items.map((m, mi) => (
                         <Text key={`${period}-${mi}`} style={styles.bulletItem}>
@@ -609,7 +615,9 @@ export const ResultScreen = () => {
               )
             })()
           ) : (
-            <Text style={styles.bodyText}>Not provided</Text>
+            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
+              Overview unavailable
+            </Text>
           )}
 
           <Text style={styles.h2}>Q&A</Text>
@@ -654,62 +662,70 @@ export const ResultScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-          {judgeBlocks.map(({ data }, idx) => (
-            <View key={`judge-${idx}`}>
-              <Text style={styles.h2}>Evaluation Results</Text>
-              {data.evaluation_results?.some((m) => m.errors?.length) ? (
-                <View style={{ marginVertical: 12 }}>
-                  <View style={styles.tableHeaderRow}>
-                    <Text style={[styles.tableHeaderCell, { flex: 0.8 }]}>
-                      Metric
-                    </Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>
-                      Error
-                    </Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
-                      Transcript Source
-                    </Text>
-                    <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
-                      Summary Source
-                    </Text>
+          {judgeBlocks.length > 0 ? (
+            judgeBlocks.map(({ data }, idx) => (
+              <View key={`judge-${idx}`}>
+                <Text style={styles.h2}>Evaluation Results</Text>
+                {data.evaluation_results?.some((m) => m.errors?.length) ? (
+                  <View style={{ marginVertical: 12 }}>
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.tableHeaderCell, { flex: 0.8 }]}>
+                        Metric
+                      </Text>
+                      <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>
+                        Error
+                      </Text>
+                      <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
+                        Transcript Source
+                      </Text>
+                      <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
+                        Summary Source
+                      </Text>
+                    </View>
+                    {data.evaluation_results.map((metric, mi) =>
+                      (metric.errors || []).map((err, ei) => (
+                        <View key={`${mi}-${ei}`} style={styles.tableRow}>
+                          <Text style={[styles.tableCell, { flex: 0.8 }]}>
+                            {metric.metric_name || "N/A"}
+                          </Text>
+                          <Text style={[styles.tableCell, { flex: 1.2 }]}>
+                            {err.error || "N/A"}
+                          </Text>
+                          <Text style={[styles.tableCell, { flex: 1 }]}>
+                            {err.transcript_text || "N/A"}
+                          </Text>
+                          <Text style={[styles.tableCell, { flex: 1 }]}>
+                            {err.summary_text || "N/A"}
+                          </Text>
+                        </View>
+                      ))
+                    )}
                   </View>
-                  {data.evaluation_results.map((metric, mi) =>
-                    (metric.errors || []).map((err, ei) => (
-                      <View key={`${mi}-${ei}`} style={styles.tableRow}>
-                        <Text style={[styles.tableCell, { flex: 0.8 }]}>
-                          {metric.metric_name || "N/A"}
-                        </Text>
-                        <Text style={[styles.tableCell, { flex: 1.2 }]}>
-                          {err.error || "N/A"}
-                        </Text>
-                        <Text style={[styles.tableCell, { flex: 1 }]}>
-                          {err.transcript_text || "N/A"}
-                        </Text>
-                        <Text style={[styles.tableCell, { flex: 1 }]}>
-                          {err.summary_text || "N/A"}
-                        </Text>
-                      </View>
-                    ))
-                  )}
-                </View>
-              ) : (
-                <Text style={styles.bodyText}>No evaluation errors found.</Text>
-              )}
-              <Text style={styles.h2}>Overall assessment</Text>
-              <Text style={styles.bodyText}>
-                {data.overall_assessment.overall_passed
-                  ? "✅ Passed"
-                  : "❌ Failed"}{" "}
-                <Text style={styles.boldText}>
-                  ({data.overall_assessment.passed_criteria || 0}/
-                  {data.overall_assessment.total_criteria || 0})
+                ) : (
+                  <Text style={styles.bodyText}>
+                    No evaluation errors found.
+                  </Text>
+                )}
+                <Text style={styles.h2}>Overall assessment</Text>
+                <Text style={styles.bodyText}>
+                  {data.overall_assessment.overall_passed
+                    ? "✅ Passed"
+                    : "❌ Failed"}{" "}
+                  <Text style={styles.boldText}>
+                    ({data.overall_assessment.passed_criteria || 0}/
+                    {data.overall_assessment.total_criteria || 0})
+                  </Text>
                 </Text>
-              </Text>
-              <Text style={styles.bodyText}>
-                {data.overall_assessment.evaluation_summary || "Not provided"}
-              </Text>
-            </View>
-          ))}
+                <Text style={styles.bodyText}>
+                  {data.overall_assessment.evaluation_summary || "Not provided"}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
+              Evaluation unavailable
+            </Text>
+          )}
         </View>
 
         <View style={styles.divider} />
@@ -908,7 +924,7 @@ const styles = StyleSheet.create({
     color: "#3C3C43",
     marginLeft: 10,
   },
-  boldText: { fontWeight: "bold", fontSize: 14 ,paddingBottom:3},
+  boldText: { fontWeight: "bold", fontSize: 14, paddingBottom: 3 },
   divider: {
     height: 1,
     backgroundColor: "#E5E5EA",

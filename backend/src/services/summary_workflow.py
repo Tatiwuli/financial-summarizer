@@ -127,7 +127,7 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
             except Exception as exc:
                 errors[key] = exc
 
-    # Handle judge result
+    # Handle judge result (allow partial success)
     if "judge" in results and not isinstance(results.get("judge"), Exception):
         judge_summary_obj, judge_summary_metadata = results["judge"]
         total_time_sec += (judge_summary_metadata.get("time") or 0)
@@ -138,16 +138,24 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
                 "data": judge_summary_obj.model_dump(),
             }
         )
-    elif "judge" in errors:
-        raise SummaryWorkflowError("llm_judge_error", str(errors["judge"]))
+    else:
+        if "judge" in errors:
+            # Log and proceed (partial success mode)
+            print("[SUMMARY_WORKFLOW] Judge generation failed:", errors["judge"])
+    # elif "judge" in errors:  COMMENTED OUT - Try partial success
+    #     raise SummaryWorkflowError("llm_judge_error", str(errors["judge"]))
 
     # Handle overview result
     if "overview" in results and not isinstance(results.get("overview"), Exception):
         ov_resp = results["overview"]
-    elif "overview" in errors:
-        raise SummaryWorkflowError(
-            "llm_overview_error", str(errors["overview"]))
+    # elif "overview" in errors:
+    #     raise SummaryWorkflowError(
+    #         "llm_overview_error", str(errors["overview"])) COMMENTED OUT - try partial success
     else:
+        if "overview" in errors:
+            # Log and proceed (partial success mode)
+            print("[SUMMARY_WORKFLOW] Overview generation failed:",
+                  errors["overview"])
         ov_resp = None
 
     # Append overview block
@@ -156,19 +164,17 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
     # finalize total_time and attach to overview metadata
     total_time_sec += (ov_metadata.get("time") or 0)
     ov_metadata["total_time"] = round(total_time_sec)
-    if not ov_obj:
-        raise SummaryWorkflowError(
-            "llm_invalid_json", "LLM did not return a parsed Pydantic object for Overview ")
-
-    validated_overview = ov_obj
-
-    blocks.append(
-        {
-            "type": "overview",
-            "metadata": ov_metadata,
-            "data": validated_overview.model_dump()
-        }
-    )
+    if ov_obj:
+        validated_overview = ov_obj
+        blocks.append(
+            {
+                "type": "overview",
+                "metadata": ov_metadata,
+                "data": validated_overview.model_dump()
+            }
+        )
+    else:
+        validated_overview = None
 
     return {
         "title": validated_overview.title if validated_overview else "Untitled",
