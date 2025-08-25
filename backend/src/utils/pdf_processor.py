@@ -133,11 +133,11 @@ class PDFProcessor:
             doc = fitz.open(str(file_path))
             self.qa_patterns = [
                 "Questions and Answers",
+                 "Question And Answer",
                 "Question and Answer",
                 "Questions & Answers",
                 "Question & Answer",
-                "Q&A",
-                "Q & A"
+              
             ]
 
             min_title_font_size = body_font_size
@@ -171,17 +171,30 @@ class PDFProcessor:
 
                             # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
-                                if re.search(re.escape(pattern), line_text, flags=re.IGNORECASE):
+                                if re.search(re.escape(pattern), line_text):
                                     if line_font_sizes:
+                                        print(f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
                                         max_size = max(line_font_sizes)
+                                        print(f"[DEBUG EXTRACT] Max size: {max_size}")
                                         # Accept if strictly larger than body, or equal-size within epsilon but bold/heading-like
-                                        epsilon = 0.2
-                                        if max_size > (min_title_font_size + epsilon) or (
-                                            abs(max_size - min_title_font_size) <= epsilon and (
-                                                is_bold)
-                                        ):
-                                            doc.close()
-                                            return page_num
+                                        print(f"[DEBUG EXTRACT] Min title font size: {min_title_font_size}")
+                                        print(f"[DEBUG EXTRACT] Is bold: {is_bold}")
+                                        if max_size > (min_title_font_size) or ( max_size == min_title_font_size and is_bold):  # noqa: E50
+                                            print(f"[DEBUG EXTRACT] Found Q&A section at page {page_num}")
+                                            q_a_page_num = page_num
+                                            return q_a_page_num
+
+                                        #last chance to find Q&A section
+                                        elif max_size == min_title_font_size:
+                                            q_a_page_num = page_num
+                                            print(
+                                                f"[DEBUG EXTRACT] Same font size - Found Q&A section at page {page_num}")
+
+                                            return q_a_page_num
+
+                                        doc.close()
+                                        
+                                    
 
             doc.close()
             return None
