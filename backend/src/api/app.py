@@ -14,7 +14,8 @@ app = FastAPI(title="Summarizer v1")
 
 raw_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
-ALLOWED_ORIGINS_LOCALHOST = ["http://localhost:8081","http://192.168.15.3:8081"]
+ALLOWED_ORIGINS_LOCALHOST = [
+    "http://localhost:8081", "http://192.168.15.3:8081"]
 
 # Basic logging
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +27,8 @@ logger.info(f"CORS_ORIGINS raw='{raw_origins}', parsed={ALLOWED_ORIGINS}")
 # THIS IS THE CORRECTED CODE
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ALLOWED_ORIGINS_LOCALHOST,  # Use the list from your env var
+    # Use the list from your env var
+    allow_origins=ALLOWED_ORIGINS or ALLOWED_ORIGINS_LOCALHOST,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
@@ -140,17 +142,3 @@ async def summarize(
         file=file, call_type=call_type, summary_length=summary_length)
     return payload
 
-
-@app.post("/v1/judge")
-async def judge(
-    file: UploadFile = File(..., description="The pdf file to judge"),
-    version_prompt: str = Form(...,
-                               description="The version of the prompt to use"),
-    qa_transcript: str = Form(..., description="The transcript of the Q&A"),
-    qa_summary: str = Form(..., description="The summary of the Q&A"),
-    summary_structure: str = Form(...,
-                                  description="The structure of the summary")
-):
-    payload = run_judge_workflow(file=file, version_prompt=version_prompt,
-                                 qa_transcript=qa_transcript, qa_summary=qa_summary, summary_structure=summary_structure)
-    return payload

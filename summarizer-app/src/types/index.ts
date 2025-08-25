@@ -24,7 +24,11 @@ export interface OverviewBlockData {
   title: string
   executives_list: Array<{ executive_name: string; role: string }>
   overview: string
-  guidance_outlook?: string
+  guidance_outlook?: Array<{
+    period_label: string
+    metric_name: string
+    metric_description: string
+  }>
 }
 
 // Metadata from backend
@@ -56,7 +60,6 @@ export interface OverviewMetadata {
   output_tokens: number
   total_tokens: number
   raw_response?: unknown
-
 }
 
 // Defines the shape of the data inside a 'judge' block
