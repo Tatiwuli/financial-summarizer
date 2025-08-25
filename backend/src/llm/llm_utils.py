@@ -77,7 +77,13 @@ class OverviewOutputFormat(BaseModel):
     title: str
     executives_list: List[Executive]
     overview: str
-    guidance_outlook: Optional[str] = None
+
+    class GuidanceItem(BaseModel):
+        period_label: str
+        metric_name: str
+        metric_description: str
+
+    guidance_outlook: Optional[List[GuidanceItem]] = None
 
 
 def load_prompts_summarize():
@@ -268,8 +274,15 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
     print("Calling Write Call Overview")
     llm_client = get_llm_client(model)
 
-    write_call_overview_prompts = overview_prompt.get(
-        "OVERVIEW").get(prompt_version)
+    overview_section = overview_prompt.get("OVERVIEW")
+    if not isinstance(overview_section, dict):
+        raise PromptConfigError("OVERVIEW section not found in overview.json")
+    write_call_overview_prompts = overview_section.get(prompt_version)
+    if not isinstance(write_call_overview_prompts, dict):
+        available = ", ".join(list(overview_section.keys()))
+        raise PromptConfigError(
+            f"Overview prompt version '{prompt_version}' not found. Available: {available}"
+        )
 
     system_prompt = write_call_overview_prompts.get("system_prompt")
     user_prompt = write_call_overview_prompts.get("user_prompt")
@@ -343,3 +356,31 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
 
 
 # write_call_overview(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")
+
+
+# if __name__ == "__main__":
+#     # Simple retrieval test for overview prompt configuration
+#     try:
+#         from src.config.runtime import OVERVIEW_PROMPT_VERSION
+
+#         section = overview_prompt.get("OVERVIEW")
+#         versions = list(section.keys()) if isinstance(section, dict) else []
+#         selected = section.get(OVERVIEW_PROMPT_VERSION) if isinstance(
+#             section, dict) else None
+#         print({
+#             "available_versions": versions,
+#             "requested_version": OVERVIEW_PROMPT_VERSION,
+#             "selected_is_dict": isinstance(selected, dict),
+#             "has_system_prompt": bool(isinstance(selected, dict) and "system_prompt" in selected),
+#             "has_user_prompt": bool(isinstance(selected, dict) and "user_prompt" in selected),
+#             "has_output_structure": bool(isinstance(selected, dict) and "output_structure" in selected),
+#             "output_structure": selected.get("output_structure") if isinstance(selected, dict) else None,
+#         })
+#     except Exception as e:
+#         print({"error": str(e)})
+# short_q_a_prompt, long_q_a_prompt, overview_prompt = load_prompts_summarize()
+# overview_section = overview_prompt.get("OVERVIEW")
+# print(overview_section)
+# print(overview_section.get("version_2"))
+# print("########################")
+# print(overview_section.get("version_2"))

@@ -169,18 +169,50 @@ export const ResultScreen = () => {
           overviewBlockData.overview || "Not provided"
         }</p>`
       )
-      if (overviewBlockData.guidance_outlook) {
-        const lines = overviewBlockData.guidance_outlook
-          .split(/\r?\n+/)
-          .map((l) => l.trim().replace(/^\s*[\-•–—]\s*/, ""))
-          .filter(Boolean)
-        parts.push(
-          `### Guidance & Outlook\n${lines.map((l) => `* ${l}`).join("\n")}`
-        )
+      if (
+        overviewBlockData.guidance_outlook &&
+        overviewBlockData.guidance_outlook.length
+      ) {
+        // Group by period_label
+        const grouped: Record<
+          string,
+          { metric_name: string; metric_description: string }[]
+        > = {}
+        overviewBlockData.guidance_outlook.forEach((item) => {
+          const key = item.period_label || "Not provided"
+          if (!grouped[key]) grouped[key] = []
+          grouped[key].push({
+            metric_name: item.metric_name || "Not provided",
+            metric_description: item.metric_description || "Not provided",
+          })
+        })
+
+        const entryTexts: string[] = []
+        const htmlEntryParts: string[] = []
+        Object.entries(grouped).forEach(([period, items]) => {
+          entryTexts.push(`**${period}**`)
+          items.forEach((m) => {
+            entryTexts.push(`- **${m.metric_name}**: ${m.metric_description}`)
+          })
+          // blank line between periods
+          entryTexts.push("")
+
+          htmlEntryParts.push(
+            `<p><strong>${period}</strong></p>` +
+              `<ul>` +
+              items
+                .map(
+                  (m) =>
+                    `<li><strong>${m.metric_name}</strong>: ${m.metric_description}</li>`
+                )
+                .join("") +
+              `</ul>`
+          )
+        })
+
+        parts.push(`### Guidance & Outlook\n${entryTexts.join("\n")}`)
         htmlParts.push(
-          `<h3>Guidance &amp; Outlook</h3><ul>` +
-            lines.map((l) => `<li>${l}</li>`).join("") +
-            `</ul>`
+          `<h3>Guidance &amp; Outlook</h3>` + htmlEntryParts.join("")
         )
       }
     }
@@ -543,16 +575,39 @@ export const ResultScreen = () => {
           </Text>
 
           <Text style={styles.h3}>Guidance & Outlook</Text>
-          {overviewBlockData?.guidance_outlook ? (
-            overviewBlockData.guidance_outlook
-              .split(/\r?\n+/)
-              .map((l) => l.trim().replace(/^\s*[\-•–—]\s*/, ""))
-              .filter(Boolean)
-              .map((item, index) => (
-                <Text key={index} style={styles.bulletItem}>
-                  • {item}
-                </Text>
-              ))
+          {overviewBlockData?.guidance_outlook &&
+          overviewBlockData.guidance_outlook.length > 0 ? (
+            (() => {
+              // Group by period_label
+              const grouped: Record<
+                string,
+                { metric_name: string; metric_description: string }[]
+              > = {}
+              for (const item of overviewBlockData.guidance_outlook) {
+                const key = item.period_label || "Not provided"
+                if (!grouped[key]) grouped[key] = []
+                grouped[key].push({
+                  metric_name: item.metric_name || "Not provided",
+                  metric_description: item.metric_description || "Not provided",
+                })
+              }
+              const entries = Object.entries(grouped)
+              return (
+                <View>
+                  {entries.map(([period, items], idx) => (
+                    <View key={`${period}-${idx}`} style={{ marginBottom: 8}}>
+                      <Text style={styles.boldText}> {period} </Text>
+                      {items.map((m, mi) => (
+                        <Text key={`${period}-${mi}`} style={styles.bulletItem}>
+                          • <Text style={styles.boldText}>{m.metric_name}</Text>
+                          : {m.metric_description}
+                        </Text>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )
+            })()
           ) : (
             <Text style={styles.bodyText}>Not provided</Text>
           )}
@@ -853,7 +908,7 @@ const styles = StyleSheet.create({
     color: "#3C3C43",
     marginLeft: 10,
   },
-  boldText: { fontWeight: "bold" },
+  boldText: { fontWeight: "bold", fontSize: 14 ,paddingBottom:3},
   divider: {
     height: 1,
     backgroundColor: "#E5E5EA",
