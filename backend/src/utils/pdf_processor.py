@@ -3,9 +3,8 @@ PDF Processor module for Earnings Call Analyzer
 Handles PDF validation, text extraction, and Q&A section identification
 """
 
-import os
+
 import re
-import uuid
 import shutil
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
@@ -21,11 +20,11 @@ class PDFProcessingError(Exception):
 class PDFProcessor:
     """Handles PDF processing operations for earnings call transcripts"""
 
-    def __init__(self, max_file_size_mb: int = 10, transcripts_dir: str = "transcripts"):
+    def __init__(self, max_file_size_mb: int = 10, save_transcripts_dir: str = "transcripts"):
 
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
-        self.transcripts_dir = Path(transcripts_dir)
-        self.transcripts_dir.mkdir(exist_ok=True)
+        self.save_transcripts_dir = Path(save_transcripts_dir)
+        self.save_transcripts_dir.mkdir(exist_ok=True)
         self.qa_patterns = [
             "Questions and Answers",
             "Question and Answer",
@@ -65,8 +64,8 @@ class PDFProcessor:
             raise PDFProcessingError(
                 f"Invalid file path: {file_path} - {str(e)}")
 
-    def save_transcript_copy(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
-        # Use original filename (sanitized) instead of generating a UUID
+    def create_file_path(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
+
         try:
             # Ensure we only use the base name, and sanitize it for filesystem safety
             base_name = Path(original_filename).name
@@ -78,7 +77,7 @@ class PDFProcessor:
             if not safe_name.lower().endswith(".pdf"):
                 safe_name = f"{safe_name}.pdf"
 
-            transcript_path = self.transcripts_dir / safe_name
+            transcript_path = self.save_transcripts_dir / safe_name
 
             # If a file with the same name already exists, reuse it (deduplication)
             if transcript_path.exists():
@@ -89,7 +88,7 @@ class PDFProcessor:
             return safe_name, str(transcript_path)
         except Exception as e:
             raise PDFProcessingError(
-                f"Failed to save transcript copy: {str(e)}")
+                f"Failed to create file path for transcript: {str(e)}")
 
     def validate_file_size(self, file_path: Path) -> None:
 
@@ -346,8 +345,7 @@ class PDFProcessor:
             self.validate_content(q_a_transcript)
 
         print("Saving transcript copy...")
-        #  Save transcript copy with UUID filename
-        uuid_filename, transcript_path = self.save_transcript_copy(
+        saved_filename, transcript_path = self.create_file_path(
             normalized_path, original_filename
         )
 
@@ -374,18 +372,139 @@ class PDFProcessor:
             "presentation_text_length": len(presentation_transcript),
             "q_a_transcript": q_a_transcript,
             "qa_text_length": len(q_a_transcript),
-            "original_filename": original_filename,
-            "uuid_filename": uuid_filename,
+            "original_filename": saved_filename,
             "transcript_path": transcript_path
         }
 
+    def process_pdf_bytes(self, pdf_bytes: bytes, original_filename: Optional[str] = None) -> Dict:
+        """
+        Process a PDF provided as in-memory bytes, without writing a temporary file.
+        """
+        if not pdf_bytes or len(pdf_bytes) == 0:
+            raise PDFProcessingError("Empty PDF upload")
 
-def create_pdf_processor(max_file_size_mb: int = 10, transcripts_dir: str = "transcripts") -> PDFProcessor:
+        # Validate size
+        if len(pdf_bytes) > self.max_file_size_bytes:
+            size_mb = len(pdf_bytes) / (1024 * 1024)
+            max_mb = self.max_file_size_bytes / (1024 * 1024)
+            raise PDFProcessingError(
+                f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
+            )
+
+        # Open document from memory
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        except Exception as e:
+            raise PDFProcessingError(
+                f"Failed to open PDF from bytes: {str(e)}")
+
+        # Analyze font sizes to infer body font size (similar to analyze_font_styles)
+        try:
+            font_sizes: List[float] = []
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                blocks = page.get_text("dict")["blocks"]
+                for block in blocks:
+                    if "lines" in block:
+                        for line in block["lines"]:
+                            for span in line["spans"]:
+                                size_val = span.get("size")
+                                if isinstance(size_val, (int, float)) and size_val > 0:
+                                    font_sizes.append(
+                                        round(float(size_val), 1))
+            if not font_sizes:
+                raise PDFProcessingError(
+                    "No valid font sizes found in document")
+            try:
+                body_font_size = mode(font_sizes)
+            except StatisticsError:
+                font_sizes.sort()
+                body_font_size = font_sizes[len(font_sizes) // 2]
+
+            # Find Q&A start page scanning from end (similar to find_qa_section_title)
+            qa_start_page: Optional[int] = None
+            qa_patterns = [
+                "Questions and Answers",
+                "Questions And Answers",
+                "Question And Answer",
+                "Question and Answer",
+                "Questions & Answers",
+                "Question & Answer",
+            ]
+            for page_num in range(len(doc) - 1, -1, -1):
+                page = doc.load_page(page_num)
+                blocks = page.get_text("dict")["blocks"]
+                for block in blocks:
+                    if "lines" not in block:
+                        continue
+                    for line in block["lines"]:
+                        line_text = "".join(span.get("text", "")
+                                            for span in line.get("spans", []))
+                        line_text = line_text.strip()
+                        line_sizes = [span.get("size") for span in line.get(
+                            "spans", []) if isinstance(span.get("size"), (int, float))]
+                        line_fonts = [str(span.get("font", "")).lower(
+                        ) for span in line.get("spans", []) if span.get("font")]
+                        is_bold = any(("bold" in f or "heavy" in f)
+                                      for f in line_fonts)
+                        for pattern in qa_patterns:
+                            if re.search(re.escape(pattern), line_text):
+                                if line_sizes:
+                                    max_size = max(line_sizes)
+                                    if max_size > body_font_size or (max_size == body_font_size and is_bold):
+                                        qa_start_page = page_num
+                                        break
+                        if qa_start_page is not None:
+                            break
+                if qa_start_page is not None:
+                    break
+
+            # Extract text sections directly from doc
+            presentation_transcript = ""
+            q_a_transcript = ""
+            if qa_start_page is None:
+                for page_num in range(len(doc)):
+                    presentation_transcript += doc.load_page(
+                        page_num).get_text()
+            else:
+                for page_num in range(qa_start_page):
+                    presentation_transcript += doc.load_page(
+                        page_num).get_text()
+                page = doc.load_page(qa_start_page)
+                page_text = page.get_text()
+                qa_start_index = -1
+                lowered = page_text.lower()
+                for pattern in qa_patterns:
+                    idx = lowered.find(pattern.lower())
+                    if idx != -1 and (qa_start_index == -1 or idx < qa_start_index):
+                        qa_start_index = idx
+                if qa_start_index != -1:
+                    presentation_transcript += page_text[:qa_start_index]
+                    q_a_transcript += page_text[qa_start_index:]
+                else:
+                    presentation_transcript += page_text
+                for page_num in range(qa_start_page + 1, len(doc)):
+                    q_a_transcript += doc.load_page(page_num).get_text()
+        finally:
+            doc.close()
+
+        # Validate content (reuse same rules)
+        self.validate_content(presentation_transcript)
+        if q_a_transcript:
+            self.validate_content(q_a_transcript)
+
+        return {
+            "presentation_transcript": presentation_transcript.strip(),
+            "presentation_text_length": len(presentation_transcript),
+            "q_a_transcript": q_a_transcript.strip(),
+            "qa_text_length": len(q_a_transcript),
+            "original_filename": (Path(original_filename or "transcript.pdf").name),
+        }
+
+
+def create_pdf_processor(max_file_size_mb: int = 10, save_transcripts_dir: str = "transcripts") -> PDFProcessor:
     """
     Main function to  create the pdf processor's instance
     """
 
-    return PDFProcessor(max_file_size_mb, transcripts_dir)
-
-
-# pdf_processor = create_pdf_processor()
+    return PDFProcessor(max_file_size_mb, save_transcripts_dir)

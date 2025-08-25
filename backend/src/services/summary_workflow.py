@@ -5,7 +5,7 @@ import time
 
 from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, write_call_overview
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from src.services.precheck import run_precheck
+from src.services.precheck import run_validate_file
 from src.config.runtime import CALL_TYPE, SUMMARY_LENGTH, SHORT_Q_A_PROMPT_VERSION, LONG_Q_A_PROMPT_VERSION
 from fastapi import UploadFile
 from pydantic import ValidationError
@@ -26,7 +26,7 @@ def run_summary_workflow(file: UploadFile, call_type: str, summary_length: str):
 
     # Validate PDF
 
-    precheck_result = run_precheck(file=file)
+    precheck_result = run_validate_file(file=file)
     blocks_list = precheck_result.get("blocks", [])
     if not blocks_list:
         raise SummaryWorkflowError(

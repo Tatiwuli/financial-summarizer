@@ -15,35 +15,38 @@ const apiClient = axios.create({
 /**
  * Envia o PDF e os parâmetros para o backend para sumarização.
  */
-export const summarizePdf = async (
+
+export const healthCheck = async (timeoutMs: number = 2000) => {
+  const response = await apiClient.get("/health", { timeout: timeoutMs })
+  return response.data
+}
+
+export const validatePdf = async (
   file: DocumentPickerAsset,
   callType: string,
   summaryLength: string
 ) => {
-  // FormData é o formato necessário para enviar arquivos via HTTP.
   const webFile = (file as any).file as File | undefined
   if (!webFile) {
     throw new Error("File not found")
   }
 
-  // O backend espera um arquivo no campo 'file'.
-  // Criamos um objeto compatível com o que o FormData espera.
   const formData = new FormData()
   formData.append("file", webFile, webFile.name || file.name || "document.pdf")
   formData.append("call_type", callType)
   formData.append("summary_length", summaryLength)
 
-  console.log("[apiService] file:", file)
-
   try {
-    console.log("[apiService] Enviando requisição para /v1/summarize...")
-    const response = await apiClient.post("/v1/summarize", formData)
-    console.log("[apiService] Resposta recebida:", response.data)
-
-    return response.data // Retorna os dados em caso de sucesso
+    const response = await apiClient.post("/v2/validate_file", formData)
+    return response.data as {
+      is_validated: boolean
+      validated_at?: string
+      input?: { call_type?: string; summary_length?: string; filename?: string }
+      transcript_name?: string
+      filename?: string
+    }
   } catch (error) {
-    console.error("[apiService] Erro na requisição:", error)
-    // Lança o erro para que o Zustand possa capturá-lo
+    // Let caller parse a structured error
     throw error
   }
 }

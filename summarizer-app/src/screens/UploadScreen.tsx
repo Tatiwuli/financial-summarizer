@@ -24,7 +24,7 @@ export const UploadScreen: React.FC = () => {
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
   // Zustand
-  const { summarize, status, error, result } = useSummaryStore()
+  const { summarize, status, error, result, validation } = useSummaryStore()
 
   console.log("[UploadScreen] useSummaryStore mounted")
   console.log("[UploadScreen] using store", useSummaryStore.getState().status)
@@ -72,7 +72,7 @@ export const UploadScreen: React.FC = () => {
         return
       }
       await summarize(selectedFile, callType, summaryLength)
-      console.log("[UploadScreen] summarize() done")
+      console.log("[UploadScreen] summarize_endpoint() done")
     } catch (e) {
       console.error("[UploadScreen] handleSubmit error:", e)
     }
@@ -140,8 +140,12 @@ export const UploadScreen: React.FC = () => {
           </Text>
         )}
 
-        {status === "loading" && (
-          <Text style={{ marginTop: 12 }}>Summarizing...</Text>
+        {status === "validating" && (
+          <Text style={{ marginTop: 12 }}>Validating file</Text>
+        )}
+
+        {status === "validated" && (
+          <Text style={{ marginTop: 12 }}>PDF Validated.</Text>
         )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}

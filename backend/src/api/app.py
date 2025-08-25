@@ -1,6 +1,6 @@
 from fastapi import FastAPI, status, Request, File, Form, UploadFile
 from fastapi.responses import JSONResponse
-from src.services.precheck import PrecheckError, run_precheck
+from src.services.precheck import PrecheckError, run_validate_file
 from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow
 from pydantic import BaseModel
 from typing import List, Dict, Any
@@ -116,23 +116,41 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
-@app.get("/v1/precheck")
-def precheck():
+@app.post("/v2/validate_file")
+async def validate_file_endpoint(
+    file: UploadFile = File(..., description="The pdf file to validate"),
+    call_type: str = Form(...,
+                          description="The type of call provided by user"),
+    summary_length: str = Form(..., description="The desired summary length")
+):
     """
-    Validate the pdf size and text sections with a pdf path 
+    Endpoint that receives a PDF file, validates it and returns the validation result and text sections
     """
 
-    payload = run_precheck()
+    if file.content_type != "application/pdf":
+        raise PrecheckError(
+            "invalid_file_type",
+            f"Tipo de arquivo inválido. Esperado arquivo com extensao '.pdf ', mas recebido '{file.content_type}'",
+        )
+
+    payload = run_validate_file(
+        file=file, call_type=call_type, summary_length=summary_length)
+    
+
     return payload
 
 
 @app.post("/v1/summarize")
-async def summarize(
+async def summarize_endpoint(
     file: UploadFile = File(..., description="The pdf file to summarize"),
     call_type: str = Form(..., description="The type of call to summarize"),
 
     summary_length: str = Form(..., description="The length of the summary")
 ):
+    """
+    Old endpoint that handles the entire workflow from pdf processing to summary generation.
+    
+    """
 
     if file.content_type != "application/pdf":
         raise PrecheckError(
@@ -141,4 +159,3 @@ async def summarize(
     payload = run_summary_workflow(
         file=file, call_type=call_type, summary_length=summary_length)
     return payload
-

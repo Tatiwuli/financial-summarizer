@@ -14,11 +14,7 @@ export const LoadingScreen = () => {
     <SafeAreaView style={styles.wrapper}>
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.title}>Generating Summary...</Text>
-        <Text style={styles.stepText}>1. Summarizing Q&A</Text>
-        <Text style={styles.stepText}>2. Evaluating the Q&A Summary</Text>
-        <Text style={styles.stepText}>3. Summarizing Prepared Remarks</Text>
-        <Text style={styles.stepText}>4. Wrapping up</Text>
+        <Text style={styles.title}>Validating file...</Text>
       </View>
     </SafeAreaView>
   )
