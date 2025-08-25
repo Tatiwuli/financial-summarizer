@@ -66,15 +66,27 @@ class PDFProcessor:
                 f"Invalid file path: {file_path} - {str(e)}")
 
     def save_transcript_copy(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
-
-        # Generate UUID filename
-        file_uuid = str(uuid.uuid4())
-        uuid_filename = f"{file_uuid}.pdf"
+        # Use original filename (sanitized) instead of generating a UUID
         try:
-            transcript_path = self.transcripts_dir / uuid_filename
-            # Copy file to transcripts directory with UUID name
+            # Ensure we only use the base name, and sanitize it for filesystem safety
+            base_name = Path(original_filename).name
+            # Replace characters not safe for filenames
+            safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", base_name).strip("_")
+            if not safe_name:
+                safe_name = "transcript.pdf"
+            # Ensure .pdf extension
+            if not safe_name.lower().endswith(".pdf"):
+                safe_name = f"{safe_name}.pdf"
+
+            transcript_path = self.transcripts_dir / safe_name
+
+            # If a file with the same name already exists, reuse it (deduplication)
+            if transcript_path.exists():
+                return safe_name, str(transcript_path)
+
+            # Otherwise, copy the source file
             shutil.copy2(source_path, transcript_path)
-            return uuid_filename, str(transcript_path)
+            return safe_name, str(transcript_path)
         except Exception as e:
             raise PDFProcessingError(
                 f"Failed to save transcript copy: {str(e)}")
@@ -133,11 +145,12 @@ class PDFProcessor:
             doc = fitz.open(str(file_path))
             self.qa_patterns = [
                 "Questions and Answers",
-                 "Question And Answer",
+                "Questions And Answers",
+                "Question And Answer",
                 "Question and Answer",
                 "Questions & Answers",
                 "Question & Answer",
-              
+
             ]
 
             min_title_font_size = body_font_size
@@ -173,18 +186,23 @@ class PDFProcessor:
                             for pattern in self.qa_patterns:
                                 if re.search(re.escape(pattern), line_text):
                                     if line_font_sizes:
-                                        print(f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
+                                        print(
+                                            f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
                                         max_size = max(line_font_sizes)
-                                        print(f"[DEBUG EXTRACT] Max size: {max_size}")
+                                        print(
+                                            f"[DEBUG EXTRACT] Max size: {max_size}")
                                         # Accept if strictly larger than body, or equal-size within epsilon but bold/heading-like
-                                        print(f"[DEBUG EXTRACT] Min title font size: {min_title_font_size}")
-                                        print(f"[DEBUG EXTRACT] Is bold: {is_bold}")
-                                        if max_size > (min_title_font_size) or ( max_size == min_title_font_size and is_bold):  # noqa: E50
-                                            print(f"[DEBUG EXTRACT] Found Q&A section at page {page_num}")
+                                        print(
+                                            f"[DEBUG EXTRACT] Min title font size: {min_title_font_size}")
+                                        print(
+                                            f"[DEBUG EXTRACT] Is bold: {is_bold}")
+                                        if max_size > (min_title_font_size) or (max_size == min_title_font_size and is_bold):  # noqa: E50
+                                            print(
+                                                f"[DEBUG EXTRACT] Found Q&A section at page {page_num}")
                                             q_a_page_num = page_num
                                             return q_a_page_num
 
-                                        #last chance to find Q&A section
+                                        # last chance to find Q&A section
                                         elif max_size == min_title_font_size:
                                             q_a_page_num = page_num
                                             print(
@@ -193,8 +211,6 @@ class PDFProcessor:
                                             return q_a_page_num
 
                                         doc.close()
-                                        
-                                    
 
             doc.close()
             return None

@@ -13,7 +13,7 @@ EFFORT_LEVEL_JUDGE = "medium"
 ####Q&A SUMMARY
 Q_A_MODEL = "gpt-5"
 LONG_Q_A_PROMPT_VERSION = "version_3"
-SHORT_Q_A_PROMPT_VERSION = "version_5"
+SHORT_Q_A_PROMPT_VERSION = "version_6"
 EFFORT_LEVEL_Q_A = "minimal"
 
 ####OVERVIEW 
