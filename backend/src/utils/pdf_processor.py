@@ -27,8 +27,16 @@ class PDFProcessor:
         self.transcripts_dir = Path(transcripts_dir)
         self.transcripts_dir.mkdir(exist_ok=True)
         self.qa_patterns = [
-            "Questions and Answers", "Question and Answer",
-            "QUESTIONS AND ANSWERS", "QUESTION AND ANSWER"
+            "Questions and Answers",
+            "Question and Answer",
+            "Questions & Answers",
+            "Question & Answer",
+            "Q&A",
+            "Q & A",
+            "Q and A",
+            "Q&A Session",
+            "Q and A Session",
+            "Analyst Q&A",
         ]
 
 # ------------------ FUNCTIONS UTILITIES ------------------------------------------------
@@ -125,12 +133,14 @@ class PDFProcessor:
             doc = fitz.open(str(file_path))
             self.qa_patterns = [
                 "Questions and Answers",
+                 "Question And Answer",
                 "Question and Answer",
-                "QUESTIONS AND ANSWERS",
-                "QUESTION AND ANSWER"
+                "Questions & Answers",
+                "Question & Answer",
+              
             ]
 
-            min_title_font_size = body_font_size * 1.2
+            min_title_font_size = body_font_size
 
             # Search from the last page to the first to avoid table of contents
             for page_num in range(len(doc) - 1, -1, -1):
@@ -142,20 +152,49 @@ class PDFProcessor:
                         for line in block["lines"]:
                             line_text = ""
                             line_font_sizes = []
+                            line_fonts: List[str] = []
 
                             for span in line["spans"]:
                                 line_text += span["text"]
                                 line_font_sizes.append(span["size"])
+                                # Collect font names to infer bold
+                                font_name = str(span.get("font", "")).lower()
+                                if font_name:
+                                    line_fonts.append(font_name)
 
                             line_text = line_text.strip()
 
-                            # Check if line matches Q&A patterns
+                            # Infer bold / heading-like
+                            is_bold = any(
+                                ("bold" in f or "heavy" in f) for f in line_fonts
+                            )
+
+                            # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
-                                if pattern in line_text:
-                                    # Check if font size is larger than body text
-                                    if line_font_sizes and max(line_font_sizes) >= min_title_font_size:
+                                if re.search(re.escape(pattern), line_text):
+                                    if line_font_sizes:
+                                        print(f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
+                                        max_size = max(line_font_sizes)
+                                        print(f"[DEBUG EXTRACT] Max size: {max_size}")
+                                        # Accept if strictly larger than body, or equal-size within epsilon but bold/heading-like
+                                        print(f"[DEBUG EXTRACT] Min title font size: {min_title_font_size}")
+                                        print(f"[DEBUG EXTRACT] Is bold: {is_bold}")
+                                        if max_size > (min_title_font_size) or ( max_size == min_title_font_size and is_bold):  # noqa: E50
+                                            print(f"[DEBUG EXTRACT] Found Q&A section at page {page_num}")
+                                            q_a_page_num = page_num
+                                            return q_a_page_num
+
+                                        #last chance to find Q&A section
+                                        elif max_size == min_title_font_size:
+                                            q_a_page_num = page_num
+                                            print(
+                                                f"[DEBUG EXTRACT] Same font size - Found Q&A section at page {page_num}")
+
+                                            return q_a_page_num
+
                                         doc.close()
-                                        return page_num
+                                        
+                                    
 
             doc.close()
             return None
@@ -197,8 +236,10 @@ class PDFProcessor:
                 page_text = page.get_text()
 
                 qa_start_index = -1
+                lowered_page_text = page_text.lower()
                 for pattern in self.qa_patterns:
-                    found_index = page_text.find(pattern)
+                    # case-insensitive search- need to check if this is reliable
+                    found_index = lowered_page_text.find(pattern.lower())
                     if found_index != -1:
                         if qa_start_index == -1 or found_index < qa_start_index:
                             qa_start_index = found_index
