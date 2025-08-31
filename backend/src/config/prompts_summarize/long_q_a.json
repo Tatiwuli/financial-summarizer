@@ -6,7 +6,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "analysts": [
+        "questions_answers": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -30,7 +30,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "analysts": [
+        "questions_answers": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -45,7 +45,7 @@
       },
       "parameters": {
         "temperature": 0,
-        "max_output_tokens": 40000 
+        "max_output_tokens": 40000
       }
     },
     "version_3": {
@@ -54,7 +54,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "analysts": [
+        "questions_answers": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",

@@ -10,8 +10,7 @@ import {
 import * as DocumentPicker from "expo-document-picker"
 
 import { ToggleButton } from "../components/common/ToggleButton"
-// ⚠️ Garanta que o caminho/case batem com o arquivo real:
-// se o arquivo é summaryStore.ts, use "summaryStore" (não "SummaryStore")
+
 import { useSummaryStore } from "../state/SummaryStoreTest"
 
 type CallType = "earnings" | "conference"
@@ -24,7 +23,15 @@ export const UploadScreen: React.FC = () => {
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
   // Zustand
-  const { summarize, status, error, result } = useSummaryStore()
+  const {
+    summarize,
+    status,
+    error,
+    result,
+
+    stage,
+    percentComplete,
+  } = useSummaryStore()
 
   console.log("[UploadScreen] useSummaryStore mounted")
   console.log("[UploadScreen] using store", useSummaryStore.getState().status)
@@ -43,7 +50,7 @@ export const UploadScreen: React.FC = () => {
 
       const file = result.assets?.[0]
       if (!file) {
-        Alert.alert("Erro", "Não foi possível ler o arquivo selecionado.")
+        Alert.alert("Error", "Unable to read the selected file.")
         return
       }
 
@@ -51,7 +58,7 @@ export const UploadScreen: React.FC = () => {
       if (typeof file.size === "number" && file.size > maxSizeBytes) {
         Alert.alert(
           "Erro",
-          "Arquivo maior que 10MB. Por favor selecione um PDF menor."
+          "File is larger than 10MB. Please select a smaller PDF."
         )
         return
       }
@@ -59,26 +66,30 @@ export const UploadScreen: React.FC = () => {
       console.log("[DocPicker] asset:", file)
       setSelectedFile(file)
     } catch (e) {
-      console.error("Erro ao selecionar arquivo:", e)
-      Alert.alert("Erro", "Falha ao selecionar o arquivo. Tente novamente.")
+      console.error("Error selecting file:", e)
+      Alert.alert("Error", "Failed to select the file. Please try again.")
     }
   }
 
-  // ✅ FECHA a função aqui (antes do return do componente)
-  const handleSubmit = async () => {
+
+  //Submit file to backend
+
+  const handleSubmitFile = async () => {
     try {
       if (!selectedFile) {
         Alert.alert("Selecione um arquivo", "Você precisa escolher um PDF.")
         return
       }
+      //Submit file to backend and start summary
       await summarize(selectedFile, callType, summaryLength)
-      console.log("[UploadScreen] summarize() done")
+      console.log("[UploadScreen] summarize_endpoint() done")
     } catch (e) {
-      console.error("[UploadScreen] handleSubmit error:", e)
+      console.error("[UploadScreen] handleSubmitFile error:", e)
     }
-  } // ← FECHOU A FUNÇÃO AQUI
+  } 
+  
 
-  // ✅ A partir daqui é o return do COMPONENTE (renderização)
+  // Render the UI
   return (
     <SafeAreaView style={styles.wrapper}>
       <View style={styles.container}>
@@ -91,13 +102,13 @@ export const UploadScreen: React.FC = () => {
             isActive={callType === "earnings"}
             onPress={() => setCallType("earnings")}
           />
-          {/** Temporarily hidden for deploy
+          {
           <ToggleButton
             label="Conference Call"
             isActive={callType === "conference"}
             onPress={() => setCallType("conference")}
           />
-          */}
+          }
         </View>
 
         <Text style={styles.label}>Select the summary length</Text>
@@ -122,26 +133,54 @@ export const UploadScreen: React.FC = () => {
           ) : (
             <View style={{ alignItems: "center" }}>
               <Text style={styles.uploadBoxText}>
-                Upload or Drop the transcript in PDF
+                Upload the transcript in PDF
               </Text>
               <Text style={styles.uploadBoxSubtext}>*.pdf (10MB)</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={handleSubmitFile}
+        >
           <Text style={styles.submitButtonText}>Generate Summary</Text>
         </TouchableOpacity>
 
-        {/* ✅ Renderize o resultado/erro AQUI, não dentro do handleSubmit */}
+        {/* ✅ Renderize o resultado/erro AQUI, não dentro do handleSubmitFile */}
         {status === "success" && result && (
           <Text selectable style={{ marginTop: 12 }}>
             {JSON.stringify(result, null, 2)}
           </Text>
         )}
 
+        {status === "validating" && (
+          <Text style={{ marginTop: 12 }}>Validating file</Text>
+        )}
+
+        {status === "validated" && (
+          <Text style={{ marginTop: 12 }}>PDF Validated.</Text>
+        )}
+
+        {/* Loading/progress view while workflow runs (before navigating to results) */}
         {status === "loading" && (
-          <Text style={{ marginTop: 12 }}>Summarizing...</Text>
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Processing</Text>
+            <Text style={styles.progressSubtitle}>{formatStage(stage)}</Text>
+            <View style={styles.progressBarOuter}>
+              <View
+                style={[
+                  styles.progressBarInner,
+                  {
+                    width: `${Math.max(0, Math.min(100, percentComplete || 0))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressPercent}>
+              {Math.round(percentComplete || 0)}%
+            </Text>
+          </View>
         )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
@@ -192,4 +231,32 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
   errorText: { color: "red", textAlign: "center", marginTop: 10 },
+  progressCard: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    backgroundColor: "#FAFAFA",
+  },
+  progressTitle: { fontSize: 18, fontWeight: "600", marginBottom: 4 },
+  progressSubtitle: { fontSize: 14, color: "#3C3C43", marginBottom: 10 },
+  progressBarOuter: {
+    height: 10,
+    width: "100%",
+    backgroundColor: "#EEE",
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  progressBarInner: {
+    height: 10,
+    backgroundColor: "#007AFF",
+  },
+  progressPercent: { marginTop: 8, fontSize: 12, color: "#6B7280" },
 })
+
+function formatStage(s?: string | null): string {
+  if (!s) return "Starting..."
+  const pretty = s.replace(/_/g, " ")
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1)
+}

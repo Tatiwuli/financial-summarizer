@@ -10,32 +10,68 @@ import {
 } from "react-native"
 import {
   OverviewBlockData,
-  QaBlockData,
+  QABlock,
+  QABlockByTopic,
   JudgeBlockData,
-  Analyst,
-  Question,
-  SummaryResult,
 } from "../types"
 import Clipboard from "@react-native-clipboard/clipboard"
 import { Ionicons } from "@expo/vector-icons"
-import React, { useState, useRef } from "react" // Import useState for collapsibility
+import React, { useState, useRef, useEffect } from "react"
+import { Animated } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { EarningsResult } from "../components/specific/EarningsResult"
+import { ConferenceResult } from "../components/specific/ConferenceResult"
+import { JudgeEvaluation } from "../components/results/common/JudgeEvaluation"
 
-import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+// @ts-ignore
+import pdfMake from "pdfmake/build/pdfmake"
+
+// --- Start of PDF Setup ---
+// This entire block should be at the top of your file, outside the component.
+
+// 1. Use 'import * as' to correctly import the CJS-style font module.
+import * as pdfFonts from "pdfmake/build/vfs_fonts"
+
+// 2. Assign the imported font object directly to pdfMake's vfs.
+// We cast pdfFonts to any here to match the vfs property's expected type.
+;(pdfMake as any).vfs = pdfFonts as any
 
 export const ResultScreen = () => {
-  const { result, reset } = useSummaryStore()
+  const { result, reset, stage, percentComplete, stages, currentCallType } =
+    useSummaryStore()
   const insets = useSafeAreaInsets()
   const [footerHeight, setFooterHeight] = useState(0)
-  const [isMetadataVisible, setIsMetadataVisible] = useState(false) // State for Metadata block visibility
+
   const reportBlockRef = useRef<any>(null)
+  const spinValue = useRef(new Animated.Value(0)).current
+
+  // Spinning animation for loading
+  useEffect(() => {
+    if (stages && stages["summary_evaluation"] === "processing") {
+      const spinAnimation = Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      )
+      spinAnimation.start()
+      return () => spinAnimation.stop()
+    }
+  }, [stages, spinValue])
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  })
   const [reportCopied, setReportCopied] = useState(false)
   const [evalCopied, setEvalCopied] = useState(false)
   const [metaCopied, setMetaCopied] = useState(false)
+  const [isMetadataVisible, setIsMetadataVisible] = useState(false)
+
   const [pdfMessage, setPdfMessage] = useState<string | null>(null)
 
-  // --- Data Extraction (Unchanged) ---
+  //Get the results
   const overviewBlockEntry = result?.blocks.find(
     (b: any) => b.type === "overview"
   )
@@ -46,8 +82,18 @@ export const ResultScreen = () => {
   const qaBlockEntry = result?.blocks.find((b: any) =>
     b.type.startsWith("q_a_")
   )
-  const qaBlockData = qaBlockEntry?.data as QaBlockData | undefined
-  const title = result?.title || "Not provided"
+  const qaEarnings = qaBlockEntry?.data as QABlock | undefined
+  const qaConference = qaBlockEntry?.data as QABlockByTopic | undefined
+
+  const resolvedCallType: "earnings" | "conference" =
+    (currentCallType as any) ||
+    ((String(result?.call_type || "")
+      .toLowerCase()
+      .includes("earn")
+      ? "earnings"
+      : "conference") as any)
+
+  const title = result?.title || "Untitled"
   const judgeBlockEntries = (result?.blocks || []).filter(
     (b: any) => b.type === "judge"
   )
@@ -60,33 +106,137 @@ export const ResultScreen = () => {
   const summaryMeta = qaBlockEntry?.metadata
   const overviewMeta = overviewBlockEntry?.metadata
 
-  //Helper function to generate a PDF report
+  // Helper function to generate a PDF report (text-preserving via browser print)
   const handleSavePdf = async () => {
     if (Platform.OS !== "web") {
       console.warn("PDF export is currently supported on web only.")
       return
     }
-    const node = reportBlockRef.current
-    if (!node) {
-      console.error("Error generating PDF: report container not found")
-      return
-    }
-    try {
-      // Show interim status and yield to the UI so it can render the message
-      setPdfMessage("Preparing PDF...")
-      await new Promise((resolve) => setTimeout(resolve, 0))
 
-      const canvas = await html2canvas(node as unknown as HTMLElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
+    try {
+      setPdfMessage("Generating PDF...")
+
+      const titleText = title || "Report"
+
+      const content: any[] = []
+      content.push({ text: titleText, style: "header", margin: [0, 0, 0, 8] })
+
+      // Executives
+      content.push({
+        text: "Executives",
+        style: "subheader",
+        margin: [0, 10, 0, 4],
       })
-      const imgData = canvas.toDataURL("image/png")
-      const pdf = new jsPDF("p", "px", [canvas.width, canvas.height])
-      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height)
-      setPdfMessage("Starting download...")
+      if (overviewBlockData?.executives_list?.length) {
+        content.push({
+          ul: overviewBlockData.executives_list.map(
+            (e) =>
+              `${e.executive_name || "Not provided"}: ${e.role || "Not provided"}`
+          ),
+          margin: [0, 0, 0, 6],
+        })
+      } else {
+        content.push({ text: "Not provided", style: "text" })
+      }
+
+      // Overview
+      content.push({
+        text: "Overview",
+        style: "subheader",
+        margin: [0, 10, 0, 4],
+      })
+      content.push({ text: overviewBlockData?.overview || "Not provided" })
+
+      // Guidance & Outlook
+      content.push({
+        text: "Guidance & Outlook",
+        style: "subheader",
+        margin: [0, 10, 0, 4],
+      })
+      if (overviewBlockData?.guidance_outlook?.length) {
+        const grouped: Record<
+          string,
+          { metric_name: string; metric_description: string }[]
+        > = {}
+        overviewBlockData.guidance_outlook.forEach((item) => {
+          const key = item.period_label || "Not provided"
+          if (!grouped[key]) grouped[key] = []
+          grouped[key].push({
+            metric_name: item.metric_name || "Not provided",
+            metric_description: item.metric_description || "Not provided",
+          })
+        })
+        Object.entries(grouped).forEach(([period, rows]) => {
+          content.push({ text: period, bold: true, margin: [0, 4, 0, 2] })
+          content.push({
+            ul: rows.map((r) => `${r.metric_name}: ${r.metric_description}`),
+          })
+        })
+      } else {
+        content.push({ text: "Overview unavailable", color: "#666" })
+      }
+
+      // Q&A
+      content.push({ text: "Q&A", style: "subheader", margin: [0, 10, 0, 4] })
+      if (resolvedCallType === "earnings") {
+        if (qaEarnings?.analysts?.length) {
+          qaEarnings.analysts.forEach((a) => {
+            content.push({
+              text: `${a.name || "Not provided"} - ${a.firm || "Not provided"}`,
+              bold: true,
+              margin: [0, 6, 0, 2],
+            })
+            const items: string[] = []
+            a.questions.forEach((q) => {
+              items.push(`Q: ${q.question || "Not provided"}`)
+              items.push(`A: ${q.answer_summary || "Not provided"}`)
+            })
+            content.push({ ul: items })
+          })
+        } else {
+          content.push({ text: "Not provided" })
+        }
+      } else {
+        // conference: topics
+        if (qaConference?.topics?.length) {
+          qaConference.topics.forEach((t) => {
+            content.push({
+              text: t.topic || "Untitled topic",
+              bold: true,
+              margin: [0, 6, 0, 2],
+            })
+            t.question_answers.forEach((analyst) => {
+              content.push({
+                text: `${analyst.name || "Not provided"} - ${analyst.firm || "Not provided"}`,
+                bold: true,
+                margin: [0, 4, 0, 2],
+              })
+              const items: string[] = []
+              analyst.questions.forEach((q) => {
+                items.push(`Q: ${q.question || "Not provided"}`)
+                items.push(`A: ${q.answer_summary || "Not provided"}`)
+              })
+              content.push({ ul: items })
+            })
+          })
+        } else {
+          content.push({ text: "Not provided" })
+        }
+      }
+
+      const docDefinition: any = {
+        pageMargins: [40, 40, 40, 40],
+        content,
+        styles: {
+          header: { fontSize: 18, bold: true },
+          subheader: { fontSize: 14, bold: true },
+          text: { fontSize: 11 },
+        },
+        defaultStyle: { fontSize: 11 },
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 0))
-      pdf.save("report.pdf")
+      pdfMake.createPdf(docDefinition).download("report.pdf")
       setPdfMessage("PDF downloaded!")
       setTimeout(() => setPdfMessage(null), 1500)
     } catch (err) {
@@ -217,8 +367,8 @@ export const ResultScreen = () => {
       }
     }
     // Q&A
-    if (qaBlockData) {
-      const qaText = qaBlockData.analysts
+    if (resolvedCallType === "earnings" && qaEarnings) {
+      const qaText = qaEarnings.analysts
         .map(
           (a) =>
             `**${a.name || "Not provided"} - ${a.firm || "Not provided"}**\n` +
@@ -236,7 +386,7 @@ export const ResultScreen = () => {
 
       htmlParts.push(
         `<h2>Q&amp;A</h2>` +
-          qaBlockData.analysts
+          qaEarnings.analysts
             .map(
               (a) =>
                 `<h3>${a.name || "Not provided"} - ${
@@ -257,6 +407,55 @@ export const ResultScreen = () => {
             )
             .join("")
       )
+    } else if (resolvedCallType === "conference" && qaConference) {
+      const topicText = qaConference.topics
+        .map((t) => {
+          const pairs = t.question_answers
+            .map(
+              (analyst) =>
+                `**${analyst.name || "Not provided"} - ${analyst.firm || "Not provided"}:**\n` +
+                analyst.questions
+                  .map(
+                    (q) =>
+                      `**Q:** ${q.question || "Not provided"}\n**A:** ${
+                        q.answer_summary || "Not provided"
+                      }`
+                  )
+                  .join("\n\n")
+            )
+            .join("\n\n")
+          return `### ${t.topic || "Untitled topic"}\n${pairs}`
+        })
+        .join("\n\n")
+      parts.push(`## Q&A\n${topicText}`)
+
+      htmlParts.push(
+        `<h2>Q&amp;A</h2>` +
+          qaConference.topics
+            .map(
+              (t) =>
+                `<h3>${t.topic || "Untitled topic"}</h3>` +
+                `<ul>` +
+                t.question_answers
+                  .map(
+                    (analyst) =>
+                      `<li><strong>${analyst.name || "Not provided"} - ${analyst.firm || "Not provided"}:</strong><br/>` +
+                      analyst.questions
+                        .map(
+                          (q) =>
+                            `<strong>Q:</strong> ${
+                              q.question || "Not provided"
+                            }<br/><strong>A:</strong> ${
+                              q.answer_summary || "Not provided"
+                            }`
+                        )
+                        .join("<br/>")
+                  )
+                  .join("") +
+                `</ul>`
+            )
+            .join("")
+      )
     }
     const plain = parts.join("\n\n")
     const html = `<div>${htmlParts.join("")}</div>`
@@ -264,6 +463,44 @@ export const ResultScreen = () => {
     if (ok) {
       setReportCopied(true)
       setTimeout(() => setReportCopied(false), 1500)
+    }
+  }
+
+  const handleCopyMetadata = async () => {
+    const metadataText = `Q&A Metadata:
+Model: ${summaryMeta?.model ?? "Not provided"}
+Effort-level: ${summaryMeta?.effort_level ?? "Not provided"}
+Duration: ${formatDuration(summaryMeta?.time)}
+Input tokens: ${summaryMeta?.input_tokens ?? "Not provided"}
+Output tokens: ${summaryMeta?.output_tokens ?? "Not provided"}
+${summaryMeta?.reasoning_tokens ? `Reasoning tokens: ${summaryMeta.reasoning_tokens}` : ""}
+
+Overview Metadata:
+Model: ${overviewMeta?.model ?? "Not provided"}
+Effort-level: ${overviewMeta?.effort_level ?? "Not provided"}
+Duration: ${formatDuration(overviewMeta?.time)}
+Input tokens: ${overviewMeta?.input_tokens ?? "Not provided"}
+Output tokens: ${overviewMeta?.output_tokens ?? "Not provided"}
+${overviewMeta?.reasoning_tokens ? `Reasoning tokens: ${overviewMeta.reasoning_tokens}` : ""}
+
+Evaluation Metadata:
+${judgeBlocks
+  .map(
+    ({ metadata }, i) => `
+Model: ${metadata?.model ?? "Not provided"}
+Effort-level: ${metadata?.effort_level ?? "Not provided"}
+Duration: ${formatDuration(metadata?.time)}
+Input tokens: ${metadata?.input_tokens ?? "Not provided"}
+Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
+  )
+  .join("\n")}`
+
+    try {
+      Clipboard.setString(metadataText)
+      setMetaCopied(true)
+      setTimeout(() => setMetaCopied(false), 2000)
+    } catch (error) {
+      console.error("Failed to copy metadata to clipboard:", error)
     }
   }
 
@@ -343,177 +580,181 @@ export const ResultScreen = () => {
       .padStart(2, "0")}`
   }
 
-  const handleCopyMetadata = async () => {
-    const parts: string[] = []
-    const htmlParts: string[] = []
-    const durations: string[] = []
-    const tokens: string[] = []
+  const parts: string[] = []
+  const htmlParts: string[] = []
+  const durations: string[] = []
+  const tokens: string[] = []
 
-    // Calculate total duration
-    const totalSeconds =
-      (summaryMeta?.time ?? 0) +
-      judgeBlocks.reduce(
-        (sum, { metadata }) => sum + (metadata?.time ?? 0),
-        0
-      ) +
-      (overviewMeta?.time ?? 0)
+  // Calculate total duration
+  const totalSeconds =
+    (summaryMeta?.time ?? 0) +
+    judgeBlocks.reduce((sum, { metadata }) => sum + (metadata?.time ?? 0), 0) +
+    (overviewMeta?.time ?? 0)
 
-    // Durations
+  // Durations
+  durations.push(
+    `**Summarize Q&A duration:** ${formatDuration(summaryMeta?.time)}`
+  )
+  const htmlDurations: string[] = []
+  htmlDurations.push(
+    `<li><strong>Summarize Q&amp;A duration:</strong> ${formatDuration(
+      summaryMeta?.time
+    )}</li>`
+  )
+  judgeBlocks.forEach(({ metadata }, i) => {
     durations.push(
-      `**Summarize Q&A duration:** ${formatDuration(summaryMeta?.time)}`
-    )
-    const htmlDurations: string[] = []
-    htmlDurations.push(
-      `<li><strong>Summarize Q&amp;A duration:</strong> ${formatDuration(
-        summaryMeta?.time
-      )}</li>`
-    )
-    judgeBlocks.forEach(({ metadata }, i) => {
-      durations.push(
-        `**Evaluating Q&A Summary duration ${i + 1}:** ${formatDuration(
-          metadata?.time
-        )}`
-      )
-      htmlDurations.push(
-        `<li><strong>Evaluating Q&amp;A Summary duration ${
-          i + 1
-        }:</strong> ${formatDuration(metadata?.time)}</li>`
-      )
-    })
-    durations.push(
-      `**Generate Overview duration:** ${formatDuration(overviewMeta?.time)}`
-    )
-    htmlDurations.push(
-      `<li><strong>Generate Overview duration:</strong> ${formatDuration(
-        overviewMeta?.time
-      )}</li>`
-    )
-
-    // Tokens
-    if (summaryMeta) {
-      tokens.push(
-        `**Summarize Q&A total tokens:** ${
-          summaryMeta.input_tokens + summaryMeta.output_tokens || "Not provided"
-        }\nModel: ${summaryMeta.model || "Not provided"}\nEffort-level: ${
-          summaryMeta.effort_level || "Not provided"
-        }\n- Input: ${summaryMeta.input_tokens || "Not provided"}\n- Output: ${
-          summaryMeta.output_tokens || "Not provided"
-        } ${
-          summaryMeta.reasoning_tokens
-            ? `(reasoning: ${summaryMeta.reasoning_tokens})`
-            : ""
-        }`
-      )
-    }
-    const htmlTokens: string[] = []
-    if (summaryMeta) {
-      htmlTokens.push(
-        `<li><strong>Summarize Q&amp;A total tokens:</strong> ${
-          (summaryMeta.input_tokens ?? 0) + (summaryMeta.output_tokens ?? 0)
-        }</li>`,
-        `<li>Model: ${summaryMeta.model || "Not provided"}</li>`,
-        `<li>Effort-level: ${summaryMeta.effort_level || "Not provided"}</li>`,
-        `<li style="margin-left:16px">- Input: ${
-          summaryMeta.input_tokens || "Not provided"
-        }</li>`,
-        `<li style="margin-left:16px">- Output: ${
-          summaryMeta.output_tokens || "Not provided"
-        } ${
-          summaryMeta.reasoning_tokens
-            ? `(reasoning: ${summaryMeta.reasoning_tokens})`
-            : ""
-        }</li>`
-      )
-    }
-    judgeBlocks.forEach(({ metadata }, i) => {
-      if (metadata) {
-        tokens.push(
-          `**Evaluating Q&A Summary ${i + 1}:**\nModel: ${
-            metadata.model || "Not provided"
-          }\nEffort-level: ${
-            metadata.effort_level || "Not provided"
-          }\n- Input: ${metadata.input_tokens || "Not provided"}\n- Output: ${
-            metadata.output_tokens || "Not provided"
-          }`
-        )
-        htmlTokens.push(
-          `<li><strong>Evaluating Q&amp;A Summary ${i + 1}:</strong></li>`,
-          `<li style="margin-left:16px">Model: ${
-            metadata.model || "Not provided"
-          }</li>`,
-          `<li style="margin-left:16px">Effort-level: ${
-            metadata.effort_level || "Not provided"
-          }</li>`,
-          `<li style="margin-left:16px">- Input: ${
-            metadata.input_tokens || "Not provided"
-          }</li>`,
-          `<li style="margin-left:16px">- Output: ${
-            metadata.output_tokens || "Not provided"
-          }</li>`
-        )
-      }
-    })
-    if (overviewMeta) {
-      tokens.push(
-        `**Generate Overview:**\nModel: ${
-          overviewMeta.model || "Not provided"
-        }\nEffort-level: ${
-          overviewMeta.effort_level || "Not provided"
-        }\n- Input: ${overviewMeta.input_tokens || "Not provided"}\n- Output: ${
-          overviewMeta.output_tokens || "Not provided"
-        } ${
-          overviewMeta.reasoning_tokens
-            ? `(reasoning: ${overviewMeta.reasoning_tokens})`
-            : ""
-        }`
-      )
-      htmlTokens.push(
-        `<li><strong>Generate Overview:</strong></li>`,
-        `<li style="margin-left:16px">Model: ${
-          overviewMeta.model || "Not provided"
-        }</li>`,
-        `<li style="margin-left:16px">Effort-level: ${
-          overviewMeta.effort_level || "Not provided"
-        }</li>`,
-        `<li style="margin-left:16px">- Input: ${
-          overviewMeta.input_tokens || "Not provided"
-        }</li>`,
-        `<li style="margin-left:16px">- Output: ${
-          overviewMeta.output_tokens || "Not provided"
-        } ${
-          overviewMeta.reasoning_tokens
-            ? `(reasoning: ${overviewMeta.reasoning_tokens})`
-            : ""
-        }</li>`
-      )
-    }
-
-    parts.push(
-      `### Total Duration (${formatDuration(totalSeconds)})\n${durations.join(
-        "\n"
+      `**Evaluating Q&A Summary duration ${i + 1}:** ${formatDuration(
+        metadata?.time
       )}`
     )
-    parts.push(`### Total Tokens\n${tokens.join("\n\n")}`)
+    htmlDurations.push(
+      `<li><strong>Evaluating Q&amp;A Summary duration ${
+        i + 1
+      }:</strong> ${formatDuration(metadata?.time)}</li>`
+    )
+  })
+  durations.push(
+    `**Generate Overview duration:** ${formatDuration(overviewMeta?.time)}`
+  )
+  htmlDurations.push(
+    `<li><strong>Generate Overview duration:</strong> ${formatDuration(
+      overviewMeta?.time
+    )}</li>`
+  )
 
-    const plain = parts.join("\n\n")
-    const html = `<div>
+  // Tokens
+  if (summaryMeta) {
+    tokens.push(
+      `**Summarize Q&A total tokens:** ${
+        summaryMeta.input_tokens + summaryMeta.output_tokens || "Not provided"
+      }\nModel: ${summaryMeta.model || "Not provided"}\nEffort-level: ${
+        summaryMeta.effort_level || "Not provided"
+      }\n- Input: ${summaryMeta.input_tokens || "Not provided"}\n- Output: ${
+        summaryMeta.output_tokens || "Not provided"
+      } ${
+        summaryMeta.reasoning_tokens
+          ? `(reasoning: ${summaryMeta.reasoning_tokens})`
+          : ""
+      }`
+    )
+  }
+  const htmlTokens: string[] = []
+  if (summaryMeta) {
+    htmlTokens.push(
+      `<li><strong>Summarize Q&amp;A total tokens:</strong> ${
+        (summaryMeta.input_tokens ?? 0) + (summaryMeta.output_tokens ?? 0)
+      }</li>`,
+      `<li>Model: ${summaryMeta.model || "Not provided"}</li>`,
+      `<li>Effort-level: ${summaryMeta.effort_level || "Not provided"}</li>`,
+      `<li style="margin-left:16px">- Input: ${
+        summaryMeta.input_tokens || "Not provided"
+      }</li>`,
+      `<li style="margin-left:16px">- Output: ${
+        summaryMeta.output_tokens || "Not provided"
+      } ${
+        summaryMeta.reasoning_tokens
+          ? `(reasoning: ${summaryMeta.reasoning_tokens})`
+          : ""
+      }</li>`
+    )
+  }
+  judgeBlocks.forEach(({ metadata }, i) => {
+    if (metadata) {
+      tokens.push(
+        `**Evaluating Q&A Summary ${i + 1}:**\nModel: ${
+          metadata.model || "Not provided"
+        }\nEffort-level: ${
+          metadata.effort_level || "Not provided"
+        }\n- Input: ${metadata.input_tokens || "Not provided"}\n- Output: ${
+          metadata.output_tokens || "Not provided"
+        }`
+      )
+      htmlTokens.push(
+        `<li><strong>Evaluating Q&amp;A Summary ${i + 1}:</strong></li>`,
+        `<li style="margin-left:16px">Model: ${
+          metadata.model || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">Effort-level: ${
+          metadata.effort_level || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">- Input: ${
+          metadata.input_tokens || "Not provided"
+        }</li>`,
+        `<li style="margin-left:16px">- Output: ${
+          metadata.output_tokens || "Not provided"
+        }</li>`
+      )
+    }
+  })
+  if (overviewMeta) {
+    tokens.push(
+      `**Generate Overview:**\nModel: ${
+        overviewMeta.model || "Not provided"
+      }\nEffort-level: ${
+        overviewMeta.effort_level || "Not provided"
+      }\n- Input: ${overviewMeta.input_tokens || "Not provided"}\n- Output: ${
+        overviewMeta.output_tokens || "Not provided"
+      } ${
+        overviewMeta.reasoning_tokens
+          ? `(reasoning: ${overviewMeta.reasoning_tokens})`
+          : ""
+      }`
+    )
+    htmlTokens.push(
+      `<li><strong>Generate Overview:</strong></li>`,
+      `<li style="margin-left:16px">Model: ${
+        overviewMeta.model || "Not provided"
+      }</li>`,
+      `<li style="margin-left:16px">Effort-level: ${
+        overviewMeta.effort_level || "Not provided"
+      }</li>`,
+      `<li style="margin-left:16px">- Input: ${
+        overviewMeta.input_tokens || "Not provided"
+      }</li>`,
+      `<li style="margin-left:16px">- Output: ${
+        overviewMeta.output_tokens || "Not provided"
+      } ${
+        overviewMeta.reasoning_tokens
+          ? `(reasoning: ${overviewMeta.reasoning_tokens})`
+          : ""
+      }</li>`
+    )
+  }
+
+  parts.push(
+    `### Total Duration (${formatDuration(totalSeconds)})\n${durations.join(
+      "\n"
+    )}`
+  )
+  parts.push(`### Total Tokens\n${tokens.join("\n\n")}`)
+
+  const plain = parts.join("\n\n")
+  const html = `<div>
       <h3>Total Duration (${formatDuration(totalSeconds)})</h3>
       <ul>${htmlDurations.join("")}</ul>
       <h3>Total Tokens</h3>
       <ul>${htmlTokens.join("")}</ul>
     </div>`
-    const ok = await copyToClipboard(plain, html)
-    if (ok) {
-      setMetaCopied(true)
-      setTimeout(() => setMetaCopied(false), 1500)
-    }
-  }
 
   if (!result) {
     return (
       <SafeAreaView style={styles.wrapper}>
         <View style={{ padding: 20 }}>
-          <Text>No result found.</Text>
+          <Text style={{ marginBottom: 10 }}>Preparing results...</Text>
+          <Text style={{ marginBottom: 4 }}>Stage: {formatStage(stage)}</Text>
+          <View style={styles.progressBarOuter}>
+            <View
+              style={[
+                styles.progressBarInner,
+                {
+                  width: `${Math.max(0, Math.min(100, percentComplete || 0))}%`,
+                },
+              ]}
+            />
+          </View>
+          <Text style={{ marginTop: 6, color: "#6B7280" }}>
+            {Math.round(percentComplete || 0)}%
+          </Text>
           <TouchableOpacity style={styles.resetButton} onPress={reset}>
             <Text style={styles.resetButtonText}>Start Over</Text>
           </TouchableOpacity>
@@ -531,125 +772,54 @@ export const ResultScreen = () => {
           { paddingBottom: (footerHeight || 0) + insets.bottom },
         ]}
       >
+        {/* --- Warning Banner --- */}
+        {stages &&
+          (stages["overview_summary"] === "failed" ||
+            stages["summary_evaluation"] === "failed") && (
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningText}>
+                {stages["overview_summary"] === "failed"
+                  ? "Overview unavailable. "
+                  : ""}
+                {stages["summary_evaluation"] === "failed"
+                  ? "Evaluation unavailable."
+                  : ""}
+              </Text>
+            </View>
+          )}
+
         {/* --- Report Block --- */}
         <View style={styles.blockContainer} ref={reportBlockRef}>
-          <View style={styles.blockHeader}>
-            <Text style={styles.blockTitle}>Report</Text>
-            <View style={styles.rightActions}>
-              {pdfMessage && (
-                <Text style={styles.copiedText}>{pdfMessage}</Text>
-              )}
-              {reportCopied && (
-                <Text style={styles.copiedText}>Copied to clipboard!</Text>
-              )}
-              <TouchableOpacity onPress={handleCopyReport}>
-                <Ionicons name="copy-outline" size={30} color="#007AFF" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSavePdf}
-                style={styles.iconButton}
-              >
-                <Ionicons name="save-outline" size={30} color="rgb(255 0 0)" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <Text style={styles.h1}>{title}</Text>
-          <Text style={styles.h2}>Executives</Text>
-          {overviewBlockData?.executives_list?.length ? (
-            overviewBlockData.executives_list.map((exec, index) => (
-              <Text key={index} style={styles.bulletItem}>
-                •{" "}
-                <Text style={styles.boldText}>
-                  {exec.executive_name || "Not provided"}
-                </Text>
-                : {exec.role || "Not provided"}
-              </Text>
-            ))
+          {resolvedCallType === "earnings" ? (
+            <EarningsResult
+              title={title}
+              overview={overviewBlockData}
+              qa={qaEarnings}
+              onCopyReport={handleCopyReport}
+              onSavePdf={handleSavePdf}
+              reportCopied={reportCopied}
+              pdfMessage={pdfMessage}
+              summaryMeta={summaryMeta}
+              overviewMeta={overviewMeta}
+            />
           ) : (
-            <Text style={styles.bodyText}>Not provided</Text>
-          )}
-
-          <Text style={styles.h2}>Overview</Text>
-          {overviewBlockData ? (
-            <Text style={styles.bodyText}>
-              {overviewBlockData.overview || "Not provided"}
-            </Text>
-          ) : (
-            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
-              Overview unavailable
-            </Text>
-          )}
-
-          <Text style={styles.h3}>Guidance & Outlook</Text>
-          {overviewBlockData?.guidance_outlook &&
-          overviewBlockData.guidance_outlook.length > 0 ? (
-            (() => {
-              // Group by period_label
-              const grouped: Record<
-                string,
-                { metric_name: string; metric_description: string }[]
-              > = {}
-              for (const item of overviewBlockData.guidance_outlook) {
-                const key = item.period_label || "Not provided"
-                if (!grouped[key]) grouped[key] = []
-                grouped[key].push({
-                  metric_name: item.metric_name || "Not provided",
-                  metric_description: item.metric_description || "Not provided",
-                })
-              }
-              const entries = Object.entries(grouped)
-              return (
-                <View>
-                  {entries.map(([period, items], idx) => (
-                    <View key={`${period}-${idx}`} style={{ marginBottom: 8 }}>
-                      <Text style={styles.boldText}> {period} </Text>
-                      {items.map((m, mi) => (
-                        <Text key={`${period}-${mi}`} style={styles.bulletItem}>
-                          • <Text style={styles.boldText}>{m.metric_name}</Text>
-                          : {m.metric_description}
-                        </Text>
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              )
-            })()
-          ) : (
-            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
-              Overview unavailable
-            </Text>
-          )}
-
-          <Text style={styles.h2}>Q&A</Text>
-          {qaBlockData?.analysts?.length ? (
-            qaBlockData.analysts.map((analyst: Analyst, index: number) => (
-              <View key={index} style={styles.analystContainer}>
-                <Text style={styles.analystName}>
-                  {analyst.name || "Not provided"} -{" "}
-                  {analyst.firm || "Not provided"}
-                </Text>
-                {analyst.questions.map((q: Question, qIndex: number) => (
-                  <View key={qIndex} style={styles.questionContainer}>
-                    <Text style={styles.bodyText}>
-                      <Text style={styles.boldText}>Q:</Text>{" "}
-                      {q.question || "Not provided"}
-                    </Text>
-                    <Text style={styles.bodyText}>
-                      <Text style={styles.boldText}>A:</Text>{" "}
-                      {q.answer_summary || "Not provided"}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ))
-          ) : (
-            <Text style={styles.bodyText}>Not provided</Text>
+            <ConferenceResult
+              title={title}
+              overview={overviewBlockData}
+              qaByTopic={qaConference}
+              onCopyReport={handleCopyReport}
+              onSavePdf={handleSavePdf}
+              reportCopied={reportCopied}
+              pdfMessage={pdfMessage}
+              summaryMeta={summaryMeta}
+              overviewMeta={overviewMeta}
+            />
           )}
         </View>
 
         <View style={styles.divider} />
 
-        {/* --- Evaluation Block --- */}
+        {/* --- Judge Evaluation Block --- */}
         <View style={styles.blockContainer}>
           <View style={styles.blockHeader}>
             <Text style={styles.blockTitle}>Evaluation</Text>
@@ -662,69 +832,32 @@ export const ResultScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-          {judgeBlocks.length > 0 ? (
-            judgeBlocks.map(({ data }, idx) => (
-              <View key={`judge-${idx}`}>
-                <Text style={styles.h2}>Evaluation Results</Text>
-                {data.evaluation_results?.some((m) => m.errors?.length) ? (
-                  <View style={{ marginVertical: 12 }}>
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.tableHeaderCell, { flex: 0.8 }]}>
-                        Metric
-                      </Text>
-                      <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>
-                        Error
-                      </Text>
-                      <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
-                        Transcript Source
-                      </Text>
-                      <Text style={[styles.tableHeaderCell, { flex: 1 }]}>
-                        Summary Source
-                      </Text>
-                    </View>
-                    {data.evaluation_results.map((metric, mi) =>
-                      (metric.errors || []).map((err, ei) => (
-                        <View key={`${mi}-${ei}`} style={styles.tableRow}>
-                          <Text style={[styles.tableCell, { flex: 0.8 }]}>
-                            {metric.metric_name || "N/A"}
-                          </Text>
-                          <Text style={[styles.tableCell, { flex: 1.2 }]}>
-                            {err.error || "N/A"}
-                          </Text>
-                          <Text style={[styles.tableCell, { flex: 1 }]}>
-                            {err.transcript_text || "N/A"}
-                          </Text>
-                          <Text style={[styles.tableCell, { flex: 1 }]}>
-                            {err.summary_text || "N/A"}
-                          </Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.bodyText}>
-                    No evaluation errors found.
-                  </Text>
-                )}
-                <Text style={styles.h2}>Overall assessment</Text>
-                <Text style={styles.bodyText}>
-                  {data.overall_assessment.overall_passed
-                    ? "✅ Passed"
-                    : "❌ Failed"}{" "}
-                  <Text style={styles.boldText}>
-                    ({data.overall_assessment.passed_criteria || 0}/
-                    {data.overall_assessment.total_criteria || 0})
-                  </Text>
-                </Text>
-                <Text style={styles.bodyText}>
-                  {data.overall_assessment.evaluation_summary || "Not provided"}
-                </Text>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.bodyText, { color: "#8A8A8E" }]}>
-              Evaluation unavailable
-            </Text>
+
+          {/* Show loading state if judge evaluation is still processing */}
+          {stages && stages["summary_evaluation"] === "processing" && (
+            <View style={styles.loadingContainer}>
+              <Animated.View
+                style={[
+                  styles.loadingSpinner,
+                  { transform: [{ rotate: spin }] },
+                ]}
+              >
+                <Ionicons name="refresh" size={24} color="#007AFF" />
+              </Animated.View>
+              <Text style={styles.loadingText}>Loading evaluation...</Text>
+            </View>
+          )}
+
+          {/* Show judge evaluation when available */}
+          {judgeBlocks && judgeBlocks.length > 0 && (
+            <JudgeEvaluation judgeBlocks={judgeBlocks} />
+          )}
+
+          {/* Show error state if judge evaluation failed */}
+          {stages && stages["summary_evaluation"] === "failed" && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>Evaluation unavailable</Text>
+            </View>
           )}
         </View>
 
@@ -761,106 +894,77 @@ export const ResultScreen = () => {
 
           {isMetadataVisible && (
             <View style={{ marginTop: 10 }}>
-              {(() => {
-                const totalSeconds =
-                  (summaryMeta?.time ?? 0) +
-                  judgeBlocks.reduce(
-                    (sum, { metadata }) => sum + (metadata?.time ?? 0),
-                    0
-                  ) +
-                  (overviewMeta?.time ?? 0)
-                return (
-                  <Text style={styles.h3}>
-                    Total Duration ({formatDuration(totalSeconds)})
-                  </Text>
-                )
-              })()}
-              <Text style={styles.bodyText}>
-                <Text style={styles.boldText}>Summarize Q&A duration:</Text>{" "}
-                {formatDuration(summaryMeta?.time)}
-              </Text>
-              {judgeBlocks.map(({ metadata }, i) => (
-                <Text key={i} style={styles.bodyText}>
-                  <Text style={styles.boldText}>
-                    Evaluating Q&A Summary duration {i + 1}:
-                  </Text>{" "}
-                  {formatDuration(metadata?.time)}
-                </Text>
-              ))}
-              <Text style={styles.bodyText}>
-                <Text style={styles.boldText}>Generate Overview duration:</Text>{" "}
-                {formatDuration(overviewMeta?.time)}
-              </Text>
-
-              <Text style={styles.h3}>Total Tokens</Text>
-              {/* Summarize Q&A Tokens */}
+              {/* Q&A Metadata */}
+              <Text style={styles.h3}>Q&A Metadata</Text>
               <View style={styles.metadataSection}>
-                <Text style={styles.bodyText}>
-                  <Text style={styles.boldText}>
-                    Summarize Q&A total tokens:
-                  </Text>{" "}
-                  {(summaryMeta?.input_tokens ?? 0) +
-                    (summaryMeta?.output_tokens ?? 0) || "Not provided"}
-                </Text>
                 <Text style={styles.metadataDetail}>
                   Model: {summaryMeta?.model ?? "Not provided"}
                 </Text>
                 <Text style={styles.metadataDetail}>
                   Effort-level: {summaryMeta?.effort_level ?? "Not provided"}
                 </Text>
-                <Text style={styles.metadataNested}>
-                  - Input: {summaryMeta?.input_tokens ?? "Not provided"}
+                <Text style={styles.metadataDetail}>
+                  Duration: {formatDuration(summaryMeta?.time)}
                 </Text>
-                <Text style={styles.metadataNested}>
-                  - Output: {summaryMeta?.output_tokens ?? "Not provided"}{" "}
-                  {summaryMeta?.reasoning_tokens
-                    ? `(reasoning: ${summaryMeta.reasoning_tokens})`
-                    : ""}
+                <Text style={styles.metadataDetail}>
+                  Input tokens: {summaryMeta?.input_tokens ?? "Not provided"}
                 </Text>
+                <Text style={styles.metadataDetail}>
+                  Output tokens: {summaryMeta?.output_tokens ?? "Not provided"}
+                </Text>
+                {summaryMeta?.reasoning_tokens && (
+                  <Text style={styles.metadataDetail}>
+                    Reasoning tokens: {summaryMeta.reasoning_tokens}
+                  </Text>
+                )}
               </View>
-              {/* Evaluating Q&A Tokens */}
-              {judgeBlocks.map(({ metadata }, i) => (
-                <View key={i} style={styles.metadataSection}>
-                  <Text style={styles.bodyText}>
-                    <Text style={styles.boldText}>
-                      Evaluating Q&A Summary {i + 1}:
-                    </Text>
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Model: {metadata?.model ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Effort-level: {metadata?.effort_level ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataNested}>
-                    - Input: {metadata?.input_tokens ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataNested}>
-                    - Output: {metadata?.output_tokens ?? "Not provided"}
-                  </Text>
-                </View>
-              ))}
-              {/* Generate Overview Tokens */}
+
+              {/* Overview Metadata */}
+              <Text style={styles.h3}>Overview Metadata</Text>
               <View style={styles.metadataSection}>
-                <Text style={styles.bodyText}>
-                  <Text style={styles.boldText}>Generate Overview:</Text>
-                </Text>
                 <Text style={styles.metadataDetail}>
                   Model: {overviewMeta?.model ?? "Not provided"}
                 </Text>
                 <Text style={styles.metadataDetail}>
                   Effort-level: {overviewMeta?.effort_level ?? "Not provided"}
                 </Text>
-                <Text style={styles.metadataNested}>
-                  - Input: {overviewMeta?.input_tokens ?? "Not provided"}
+                <Text style={styles.metadataDetail}>
+                  Duration: {formatDuration(overviewMeta?.time)}
                 </Text>
-                <Text style={styles.metadataNested}>
-                  - Output: {overviewMeta?.output_tokens ?? "Not provided"}{" "}
-                  {overviewMeta?.reasoning_tokens
-                    ? `(reasoning: ${overviewMeta.reasoning_tokens})`
-                    : ""}
+                <Text style={styles.metadataDetail}>
+                  Input tokens: {overviewMeta?.input_tokens ?? "Not provided"}
                 </Text>
+                <Text style={styles.metadataDetail}>
+                  Output tokens: {overviewMeta?.output_tokens ?? "Not provided"}
+                </Text>
+                {overviewMeta?.reasoning_tokens && (
+                  <Text style={styles.metadataDetail}>
+                    Reasoning tokens: {overviewMeta.reasoning_tokens}
+                  </Text>
+                )}
               </View>
+
+              {/* Evaluation Metadata */}
+              <Text style={styles.h3}>Evaluation Metadata</Text>
+              {judgeBlocks.map(({ metadata }, i) => (
+                <View key={i} style={styles.metadataSection}>
+                  <Text style={styles.metadataDetail}>
+                    Model: {metadata?.model ?? "Not provided"}
+                  </Text>
+                  <Text style={styles.metadataDetail}>
+                    Effort-level: {metadata?.effort_level ?? "Not provided"}
+                  </Text>
+                  <Text style={styles.metadataDetail}>
+                    Duration: {formatDuration(metadata?.time)}
+                  </Text>
+                  <Text style={styles.metadataDetail}>
+                    Input tokens: {metadata?.input_tokens ?? "Not provided"}
+                  </Text>
+                  <Text style={styles.metadataDetail}>
+                    Output tokens: {metadata?.output_tokens ?? "Not provided"}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -971,6 +1075,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   resetButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
+  progressBarOuter: {
+    height: 10,
+    width: "100%",
+    backgroundColor: "#EEE",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  progressBarInner: {
+    height: 10,
+    backgroundColor: "#007AFF",
+  },
+  warningBanner: {
+    backgroundColor: "#FFF8E1",
+    borderColor: "#F59E0B",
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  warningText: {
+    color: "#92400E",
+    fontSize: 14,
+  },
   // Table Styles
   tableHeaderRow: {
     flexDirection: "row",
@@ -994,4 +1122,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#3C3C43",
   },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  loadingSpinner: {
+    marginRight: 10,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666",
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#FF3B30",
+  },
 })
+
+function formatStage(s?: string | null): string {
+  if (!s) return "Starting..."
+  const pretty = s.replace(/_/g, " ")
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1)
+}

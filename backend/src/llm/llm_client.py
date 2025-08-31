@@ -214,3 +214,141 @@ def get_llm_client(model: str) -> BaseLLMClient:
 class LLMClientError(Exception):
     """Custom exception for all LLM client errors."""
     pass
+
+
+
+prompt = """
+Read the user’s structured request and transform it into a complete prompt that another LLM will use. 
+Your task is to synthesize the user’s requirements into a clear, detailed prompt that will guide the LLM 
+to generate relevant, accurate, and well-structured summaries of corporate financial documents. 
+You should strictly follow the instructions in the recipe below. 
+
+# USER REQUEST
+The user will provide a structured request in the following format:
+
+    [ Summary Goal ] 
+    [ Information Source (e.g., earnings call transcript, conference) ] 
+    [ Key Information Needs ] 
+    [ Edge Cases ] 
+    [ Non-Negotiable Data and Business Requirements ]
+    [ Output Structure ]
+
+
+# RECIPE FOR WRITING A PROMPT
+
+## TASK GOAL
+**Purpose:** Clearly and objectively define the TASK GOAL for the LLM.  
+This section must include the **Summary Goal** and the **Information Source**.  
+It should explain what the LLM should strive for and the source(s) it will analyze.  
+
+_Derived from: [Summary Goal] + [Information Source]_  
+
+---
+
+## FUNDAMENTAL RULES
+**Purpose:** Provide a clear and specific set of rules that the LLM must follow when conducting the task.  
+This section should reflect **mandatory conditions** to ensure accuracy and compliance.  
+
+_Derived from: [Non-Negotiable Data and Business Requirements] + [Edge Cases]_  
+
+---
+
+## RELEVANT INFORMATION
+**Purpose:** List what information is considered **relevant** and must be prioritized from the transcript/source.  
+This ensures the summary is **focused** and aligned with user intent.  
+
+_Derived from: [Summary Goal] + [Key Information Needs]_  
+
+---
+
+## INSTRUCTIONS
+**Purpose:** Break down the TASK GOAL into clear sub-problems.  
+Provide a **step-by-step ordered list** of how the LLM should process the input material to achieve the TASK GOAL, 
+while respecting the RELEVANT INFORMATION and FUNDAMENTAL RULES.  
+
+- If **Edge Cases** exist, map them explicitly to the relevant step and provide a clear handling instruction.  
+
+---
+
+## OUTPUT STRUCTURE
+**Purpose:** Define the structure that the LLM must use when delivering the final summary.  
+The format must be **logical, markdown-formatted, and clean** for easy transfer into Google Docs.  
+
+The structure must follow the OUTPUT STRUCTURE  and ensure readability, clarity, and professional presentation.  
+
+-----------------------
+# Your Output Structure: 
+It should be a JSON object with two main components: 1) a prompt_generation_reasoning section that explains your reasoning behind generating the prompt, and 2) a prompt section that includes the prompt that will be used to generate the summary. 
+
+```json
+{OUTPUT_STRUCTURE}
+```
+"""
+
+user_prompt = """
+
+#User request
+    
+    [ What’s the summary goal  ] : Write a short summary of the Q&A section of an earning call transcript. From the Q&A summary,  I want to undestand :
+    - Outlook and Guidance of Revenue and Margin (include other if mentioned in the Q&A)
+    - The quarter's main financial results and KPIs
+    -  What the analysts are most interested in and the key higlights of the executive's answers. 
+   
+
+    [ What they want to know from the summary ] : I want to know what are the main topics discussed in the Q&A section , including all the analysts' questions and any reference to investors ,  and the corresponding answers , including, but not limited to, key financial metrics and KPIs, guidance and outlook, events in company's strategy or management, and any relevant sentiment from the analyst and executive. 
+
+    
+    [ What’s the Information Source ( e.g. earing call transcript, conference)]
+    -Q &A section of an Earning call transcript ,
+    
+    
+    [ Edge cases ] 
+    - LLM can fabricate metric or information even if transcript is empty
+    - LLM include all of the information without prioritizing the most relevant topics. 
+    - LLM missing some of the analysts or questions from a mentioned analyst. 
+    
+    [ Non-negotiable data requirements and business requirements]
+    - Short 1-2 page summary focusing on the most relevant topics. 
+    - Single source only: Use only the provided transcript between <START TRANSCRIPT> and <END TRANSCRIPT>. If empty, answer "No transcript provided."
+    - Include ALL  the analysts' questions and corresponding answers. 
+    - NEVER FABRICATE any metric, insight. 
+
+    [OUTPUT STRUCTURE]
+
+    Title of the Earning Call 
+
+    Main Guidance and Outlook 
+
+
+
+    Analyst name and role: Question 
+    Answer 
+
+    ( repeat for all questions and answers )
+    
+
+"""
+
+output_structure = {
+        "prompt_generation_reasoning": "[Explain your reasoning behind generating this prompt ]",
+        "prompt": 
+        {
+            "task_goal": "[Explain the task goal in detail]",
+            "fundamental_rules": "[Explain the fundamental rules in detail]",
+            "relevant_information": "[Explain the relevant information in detail]",
+            "instructions": "[Explain the instructions in detail]",
+            "output_structure": "[Explain the output structure in detail]"
+        }
+}
+    
+# llm = get_llm_client(model="gpt-5")
+# prompt = prompt.format(OUTPUT_STRUCTURE=output_structure)
+
+
+# response = llm.generate(system_prompt=prompt, user_prompt=user_prompt, max_output_tokens=40000)
+
+# print(response)
+
+
+
+

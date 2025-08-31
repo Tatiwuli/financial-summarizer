@@ -15,35 +15,78 @@ const apiClient = axios.create({
 /**
  * Envia o PDF e os parâmetros para o backend para sumarização.
  */
-export const summarizePdf = async (
+
+export const healthCheck = async (timeoutMs: number = 2000) => {
+  const response = await apiClient.get("/health", { timeout: timeoutMs })
+  return response.data
+}
+
+export const validatePdf = async (
   file: DocumentPickerAsset,
   callType: string,
   summaryLength: string
 ) => {
-  // FormData é o formato necessário para enviar arquivos via HTTP.
   const webFile = (file as any).file as File | undefined
   if (!webFile) {
     throw new Error("File not found")
   }
 
-  // O backend espera um arquivo no campo 'file'.
-  // Criamos um objeto compatível com o que o FormData espera.
   const formData = new FormData()
+  // user inputs
   formData.append("file", webFile, webFile.name || file.name || "document.pdf")
   formData.append("call_type", callType)
   formData.append("summary_length", summaryLength)
 
-  console.log("[apiService] file:", file)
-
   try {
-    console.log("[apiService] Enviando requisição para /v1/summarize...")
-    const response = await apiClient.post("/v1/summarize", formData)
-    console.log("[apiService] Resposta recebida:", response.data)
-
-    return response.data // Retorna os dados em caso de sucesso
+    // Send POST API request
+    const response = await apiClient.post("/validate_file", formData)
+    // Parse the response
+    return response.data as {
+      is_validated: boolean
+      validated_at?: string
+      input?: { call_type?: string; summary_length?: string; filename?: string }
+      transcript_name?: string
+      filename?: string
+      job_id: string
+    }
   } catch (error) {
-    console.error("[apiService] Erro na requisição:", error)
-    // Lança o erro para que o Zustand possa capturá-lo
     throw error
   }
+}
+
+export const getSummary = async (jobId: string) => {
+  // GET request with a job id
+  const response = await apiClient.get("/summary", {
+    params: { job_id: jobId },
+  })
+
+  return response.data as {
+    job_id: string
+    transcript_name: string
+    current_stage:
+      | "q_a_summary"
+      | "overview_summary"
+      | "summary_evaluation"
+      | "completed"
+      | "failed"
+    //each stage has these status: pending, running, completed, failed
+    stages: Record<string, "pending" | "running" | "completed" | "failed">
+    // for progress bar
+    percent_complete: number
+    updated_at: string
+    input?: { call_type?: string; summary_length?: string; filename?: string }
+    outputs?: {
+      q_a_summary?: any
+      overview_summary?: any
+      summary_evaluation?: any
+    }
+    error?: { code?: string; message?: string }
+  }
+}
+
+export const cancelJob = async (jobId: string) => {
+  const response = await apiClient.post("/cancel", null, {
+    params: { job_id: jobId },
+  })
+  return response.data as { ok: boolean; job_id: string; status: string }
 }

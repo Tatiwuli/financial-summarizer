@@ -1,8 +1,10 @@
 import os
-import tempfile
+from datetime import datetime
 from fastapi import UploadFile
 from src.utils.pdf_processor import PDFProcessingError, create_pdf_processor
-from src.config.runtime import CALL_TYPE, TRANSCRIPTS_DIR
+from src.config.runtime import TRANSCRIPTS_DIR
+import json
+import hashlib
 
 
 class PrecheckError(Exception):
@@ -14,20 +16,22 @@ class PrecheckError(Exception):
         self.message = message
 
 
-def run_precheck(file: UploadFile):
-    processor = create_pdf_processor(transcripts_dir=TRANSCRIPTS_DIR)
+def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
+    processor = create_pdf_processor(save_transcripts_dir=TRANSCRIPTS_DIR)
 
-    # Create  a temporary file to get the uploaded file content
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-        temp_file.write(file.file.read())
-        temp_file_path = temp_file.name
+    original_filename = (file.filename or "transcript.pdf")
 
+    # Read bytes directly
+    pdf_bytes = file.file.read()
     try:
-        result = processor.process_pdf(temp_file_path)
+        # Preserve user-provided filename
+        result = processor.process_pdf_bytes(
+            pdf_bytes, original_filename=original_filename
+        )
 
         # DEBUG: Log all keys in the result
-        print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
-        print(f"[DEBUG PRECHECK] Full result: {result}")
+        # print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
+        # print(f"[DEBUG PRECHECK] Full result: {result}")
 
         # DEBUG: Log the extracted content lengths and snippets
         pres_transcript = result.get("presentation_transcript", "")
@@ -53,33 +57,72 @@ def run_precheck(file: UploadFile):
         raise PrecheckError("pdf_processing_error", str(e))
 
     finally:
-        os.unlink(temp_file_path)  # delete the temporary file
+        pass
 
     pres_len = result.get("presentation_text_length")
     qa_len = result.get("qa_text_length")
 
-    envelope = {
-        "title": result.get("original_filename") or "Documento",
-        "call_type": CALL_TYPE,
-        "blocks": [
-            {
-                "type": "precheck",
-                "metadata": {
-                    "generated_at": None},
-                "data": {
-                    # Fixed: use correct key
-                    "qa_transcript": result.get("q_a_transcript"),
-                    "presentation_transcript": result.get("presentation_transcript"),
-                    "pdf": {
-                        "original_filename": result.get("original_filename"),
-                        "uuid_filename": result.get("uuid_filename"),
-                        "transcript_path": result.get("transcript_path"),
-                        "presentation_text_length": pres_len,
-                        "qa_text_length": qa_len
-                    }
-                }
-            }
-        ]
+    # Build payload to persist server-side
+    save_transcript_data = {
+
+        "validated_at": datetime.now().isoformat(),
+        "input": {
+            "call_type": call_type,
+            "summary_length": summary_length,
+            "filename": result.get("original_filename"),
+        },
+        "transcripts": {
+            "presentation": result.get("presentation_transcript") or "",
+            "q_a": result.get("q_a_transcript") or "",
+        },
     }
 
-    return envelope
+    # Compute content hash (normalized simple hash)
+    norm_p = (save_transcript_data["transcripts"]
+              ["presentation"] or "").strip()
+    norm_q = (save_transcript_data["transcripts"]["q_a"] or "").strip()
+    combined = (norm_p + "\n\n" + norm_q).encode("utf-8", errors="ignore")
+    content_hash = hashlib.sha256(combined).hexdigest()
+
+    # Use the literal original filename for the transcript JSON name
+    base_name = os.path.basename(result.get(
+        "original_filename") or "transcript.pdf")
+    json_name = os.path.splitext(base_name)[0] + ".json"
+    json_path = os.path.join(TRANSCRIPTS_DIR, json_name)
+
+    save_transcript_data["content_hash"] = content_hash
+    save_transcript_data["transcript_name"] = json_name
+
+    # If a JSON with the same literal name exists, compare content hashes
+    # - If equal: reuse existing JSON (skip saving)
+    # - If different or unreadable: overwrite by saving the new JSON
+    reuse_existing = False
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            if existing.get("content_hash") == content_hash:
+                reuse_existing = True
+                print(f"[PRECHECK] Reusing existing transcript: {json_path}")
+        except Exception:
+            # If failed to read the existing file, ignore the error and overwrite it with the new one
+            reuse_existing = False
+
+    if not reuse_existing:  # save it
+        os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(save_transcript_data, f, ensure_ascii=False)
+
+    # Output for frontend
+    output = {
+        "is_validated": True,
+        "validated_at": datetime.now().isoformat(),
+        "input": {
+            "call_type": call_type,
+            "summary_length": summary_length,
+            "filename": result.get("original_filename"), #it will be the same with the matched existing file 
+        },
+        "transcript_name": json_name,
+    }
+
+    return output

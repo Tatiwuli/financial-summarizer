@@ -3,9 +3,8 @@ PDF Processor module for Earnings Call Analyzer
 Handles PDF validation, text extraction, and Q&A section identification
 """
 
-import os
+
 import re
-import uuid
 import shutil
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
@@ -21,11 +20,11 @@ class PDFProcessingError(Exception):
 class PDFProcessor:
     """Handles PDF processing operations for earnings call transcripts"""
 
-    def __init__(self, max_file_size_mb: int = 10, transcripts_dir: str = "transcripts"):
+    def __init__(self, max_file_size_mb: int = 10, save_transcripts_dir: str = "transcripts"):
 
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
-        self.transcripts_dir = Path(transcripts_dir)
-        self.transcripts_dir.mkdir(exist_ok=True)
+        self.save_transcripts_dir = Path(save_transcripts_dir)
+        self.save_transcripts_dir.mkdir(exist_ok=True)
         self.qa_patterns = [
             "Questions and Answers",
             "Question and Answer",
@@ -65,8 +64,8 @@ class PDFProcessor:
             raise PDFProcessingError(
                 f"Invalid file path: {file_path} - {str(e)}")
 
-    def save_transcript_copy(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
-        # Use original filename (sanitized) instead of generating a UUID
+    def create_file_path(self, source_path: Path, original_filename: str) -> Tuple[str, str]:
+
         try:
             # Ensure we only use the base name, and sanitize it for filesystem safety
             base_name = Path(original_filename).name
@@ -78,7 +77,7 @@ class PDFProcessor:
             if not safe_name.lower().endswith(".pdf"):
                 safe_name = f"{safe_name}.pdf"
 
-            transcript_path = self.transcripts_dir / safe_name
+            transcript_path = self.save_transcripts_dir / safe_name
 
             # If a file with the same name already exists, reuse it (deduplication)
             if transcript_path.exists():
@@ -89,7 +88,7 @@ class PDFProcessor:
             return safe_name, str(transcript_path)
         except Exception as e:
             raise PDFProcessingError(
-                f"Failed to save transcript copy: {str(e)}")
+                f"Failed to create file path for transcript: {str(e)}")
 
     def validate_file_size(self, file_path: Path) -> None:
 
@@ -101,10 +100,10 @@ class PDFProcessor:
                 f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
             )
 
-    def analyze_font_styles(self, file_path: Path) -> float:
+    def analyze_font_styles(self,  doc: fitz.Document) -> float:
 
         try:
-            doc = fitz.open(str(file_path))
+           
             font_sizes = []
 
             for page_num in range(len(doc)):
@@ -118,9 +117,6 @@ class PDFProcessor:
                                 font_size = span["size"]
                                 if font_size > 0:  # Filter out invalid sizes
                                     font_sizes.append(round(font_size, 1))
-
-            doc.close()
-
             if not font_sizes:
                 raise PDFProcessingError(
                     "No valid font sizes found in document")
@@ -139,10 +135,10 @@ class PDFProcessor:
             raise PDFProcessingError(
                 f"Failed to analyze font styles: {str(e)}")
 
-    def find_qa_section_title(self, file_path: Path, body_font_size: float) -> Optional[int]:
+    def find_qa_section_title(self, doc: fitz.Document, body_font_size: float) -> Optional[int]:
 
         try:
-            doc = fitz.open(str(file_path))
+          
             self.qa_patterns = [
                 "Questions and Answers",
                 "Questions And Answers",
@@ -184,7 +180,10 @@ class PDFProcessor:
 
                             # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
+
                                 if re.search(re.escape(pattern), line_text):
+                                    print(
+                                        f"[DEBUG EXTRACT] Found Q&A pattern: {pattern}")
                                     if line_font_sizes:
                                         print(
                                             f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
@@ -210,25 +209,25 @@ class PDFProcessor:
 
                                             return q_a_page_num
 
-                                        doc.close()
+                                       
 
-            doc.close()
+           
             return None
 
         except Exception as e:
             raise PDFProcessingError(f"Failed to find Q&A section: {str(e)}")
 
-    def extract_text_sections(self, file_path: Path) -> Tuple[str, str]:
+    def extract_text_sections(self, doc: fitz.Document) -> Tuple[str, str]:
 
         try:
-            body_font_size = self.analyze_font_styles(file_path)
+            body_font_size = self.analyze_font_styles(doc)
             print(f"[DEBUG EXTRACT] Body font size: {body_font_size}")
 
             qa_start_page = self.find_qa_section_title(
-                file_path, body_font_size)
+                doc       , body_font_size)
             print(f"[DEBUG EXTRACT] Q&A start page: {qa_start_page}")
 
-            doc = fitz.open(str(file_path))
+           
             presentation_transcript = ""
             q_a_transcript = ""
 
@@ -295,7 +294,7 @@ class PDFProcessor:
                             presentation_transcript = presentation_transcript.strip()[
                                 :-len(last_page_text)].strip()
 
-            doc.close()
+           
             return presentation_transcript.strip(), q_a_transcript.strip()
 
         except Exception as e:
@@ -346,8 +345,7 @@ class PDFProcessor:
             self.validate_content(q_a_transcript)
 
         print("Saving transcript copy...")
-        #  Save transcript copy with UUID filename
-        uuid_filename, transcript_path = self.save_transcript_copy(
+        saved_filename, transcript_path = self.create_file_path(
             normalized_path, original_filename
         )
 
@@ -374,18 +372,78 @@ class PDFProcessor:
             "presentation_text_length": len(presentation_transcript),
             "q_a_transcript": q_a_transcript,
             "qa_text_length": len(q_a_transcript),
-            "original_filename": original_filename,
-            "uuid_filename": uuid_filename,
+            "original_filename": saved_filename,
             "transcript_path": transcript_path
         }
 
+    def process_pdf_bytes(self, pdf_bytes: bytes, original_filename: Optional[str] = None) -> Dict:
+        """
+        Process a PDF provided as in-memory bytes, without writing a temporary file.
+        """
+        if not pdf_bytes or len(pdf_bytes) == 0:
+            raise PDFProcessingError("Empty PDF upload")
 
-def create_pdf_processor(max_file_size_mb: int = 10, transcripts_dir: str = "transcripts") -> PDFProcessor:
+        # Validate size
+        if len(pdf_bytes) > self.max_file_size_bytes:
+            size_mb = len(pdf_bytes) / (1024 * 1024)
+            max_mb = self.max_file_size_bytes / (1024 * 1024)
+            raise PDFProcessingError(
+                f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
+            )
+
+        # Open document from memory
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        except Exception as e:
+            raise PDFProcessingError(
+                f"Failed to open PDF from bytes: {str(e)}")
+
+        print("Extracting text sections...")
+        #  Extract both text sections
+        presentation_transcript, q_a_transcript = self.extract_text_sections(
+            doc)
+
+        print("Validating content...")
+        #  Validate content
+        self.validate_content(presentation_transcript)
+        if q_a_transcript:  # Only validate Q&A if it exists
+            self.validate_content(q_a_transcript)
+
+    
+
+        # DEBUG: Log extracted content details
+        print(
+            f"[DEBUG PDF_PROCESSOR] Processing complete for: {original_filename}")
+        print(
+            f"[DEBUG PDF_PROCESSOR] Presentation length: {len(presentation_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A length: {len(q_a_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A exists: {bool(q_a_transcript)}")
+
+        if presentation_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Presentation preview: {presentation_transcript[:200]}...")
+
+        if q_a_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Q&A preview: {q_a_transcript[:200]}...")
+        else:
+            print("[DEBUG PDF_PROCESSOR] Q&A transcript is EMPTY!")
+
+        doc.close()
+
+
+        return {
+            "presentation_transcript": presentation_transcript.strip(),
+            "presentation_text_length": len(presentation_transcript),
+            "q_a_transcript": q_a_transcript.strip(),
+            "qa_text_length": len(q_a_transcript),
+            "original_filename": (Path(original_filename or "transcript.pdf").name),
+        }
+
+
+def create_pdf_processor(max_file_size_mb: int = 10, save_transcripts_dir: str = "transcripts") -> PDFProcessor:
     """
     Main function to  create the pdf processor's instance
     """
 
-    return PDFProcessor(max_file_size_mb, transcripts_dir)
-
-
-# pdf_processor = create_pdf_processor()
+    return PDFProcessor(max_file_size_mb, save_transcripts_dir)

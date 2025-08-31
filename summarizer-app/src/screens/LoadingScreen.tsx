@@ -7,18 +7,41 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native"
+import { useSummaryStore } from "../state/SummaryStoreTest"
 
 export const LoadingScreen = () => {
+  const { stage, percentComplete, warnings, cancel } = useSummaryStore()
   return (
     <SafeAreaView style={styles.wrapper}>
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.title}>Generating Summary...</Text>
-        <Text style={styles.stepText}>1. Summarizing Q&A</Text>
-        <Text style={styles.stepText}>2. Evaluating the Q&A Summary</Text>
-        <Text style={styles.stepText}>3. Summarizing Prepared Remarks</Text>
-        <Text style={styles.stepText}>4. Wrapping up</Text>
+        <Text style={styles.title}>Generating summary</Text>
+        <Text style={styles.stepText}>Stage: {formatStage(stage)}</Text>
+        <View style={styles.progressBarOuter}>
+          <View
+            style={[
+              styles.progressBarInner,
+              { width: `${Math.max(0, Math.min(100, percentComplete || 0))}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.percentText}>
+          {Math.round(percentComplete || 0)}%
+        </Text>
+        {warnings && warnings.length > 0 && (
+          <View style={styles.warningBox}>
+            {warnings.map((w, i) => (
+              <Text key={i} style={styles.warningText}>
+                {String(w)}
+              </Text>
+            ))}
+          </View>
+        )}
+        <TouchableOpacity style={styles.stopButton} onPress={cancel}>
+          <Text style={styles.stopButtonText}>Stop</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   )
@@ -47,4 +70,41 @@ const styles = StyleSheet.create({
     color: "#8A8A8E",
     marginBottom: 10,
   },
+  progressBarOuter: {
+    height: 10,
+    width: 240,
+    backgroundColor: "#EEE",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginTop: 8,
+  },
+  progressBarInner: {
+    height: 10,
+    backgroundColor: "#007AFF",
+  },
+  percentText: { marginTop: 8, fontSize: 14, color: "#6B7280" },
+  warningBox: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: "#FFF8E1",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    borderRadius: 8,
+    width: 260,
+  },
+  warningText: { color: "#92400E", fontSize: 12, marginBottom: 4 },
+  stopButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+  },
+  stopButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
 })
+
+function formatStage(s?: string | null): string {
+  if (!s) return "Starting..."
+  const pretty = s.replace(/_/g, " ")
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1)
+}

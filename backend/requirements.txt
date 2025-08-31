@@ -25,3 +25,6 @@ llmlingua>=0.2.0
 orjson>=3.9.15
 rich>=13.7.0
 
+# Cache client
+pymemcache>=4.0.0
+

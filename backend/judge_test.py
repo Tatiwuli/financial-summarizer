@@ -1,10 +1,10 @@
 # from src.services.summary_workflow import run_judge_workflow
-# from src.services.precheck import run_precheck
+# from src.services.precheck import run_validate_file
 # import os
 # import json
 # from fastapi import UploadFile
 # from src.utils.pdf_processor import create_pdf_processor, PDFProcessingError
-# from src.config.runtime import TRANSCRIPTS_DIR, CALL_TYPE
+# from src.config.runtime import save_transcripts_dir, CALL_TYPE
 
 # q_a_summary = """
 # Atlassian Corporation, Q4 2025 Earnings Call, Aug 07, 2025
@@ -86,7 +86,7 @@
 # summary_structure_text = """
 # #Title
 # **Analyst Name (Firm)**
-# **Question**: 
+# **Question**:
 # **Answer Summary**:
 
 # """
@@ -95,7 +95,7 @@
 
 
 # def pdf_path_check(file_path):
-#     processor = create_pdf_processor(transcripts_dir=TRANSCRIPTS_DIR)
+#     processor = create_pdf_processor(save_transcripts_dir=save_transcripts_dir)
 
 #     result = processor.process_pdf(file_path)
 
