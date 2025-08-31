@@ -5,6 +5,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from src.services.precheck import PrecheckError, run_validate_file
+from src.services.job_utils import _get_lock_for_job
 from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow_from_saved_transcripts
 from pydantic import BaseModel
 from typing import List, Dict, Any
