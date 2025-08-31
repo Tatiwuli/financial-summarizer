@@ -100,10 +100,10 @@ class PDFProcessor:
                 f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
             )
 
-    def analyze_font_styles(self, file_path: Path) -> float:
+    def analyze_font_styles(self,  doc: fitz.Document) -> float:
 
         try:
-            doc = fitz.open(str(file_path))
+           
             font_sizes = []
 
             for page_num in range(len(doc)):
@@ -117,9 +117,6 @@ class PDFProcessor:
                                 font_size = span["size"]
                                 if font_size > 0:  # Filter out invalid sizes
                                     font_sizes.append(round(font_size, 1))
-
-            doc.close()
-
             if not font_sizes:
                 raise PDFProcessingError(
                     "No valid font sizes found in document")
@@ -138,10 +135,10 @@ class PDFProcessor:
             raise PDFProcessingError(
                 f"Failed to analyze font styles: {str(e)}")
 
-    def find_qa_section_title(self, file_path: Path, body_font_size: float) -> Optional[int]:
+    def find_qa_section_title(self, doc: fitz.Document, body_font_size: float) -> Optional[int]:
 
         try:
-            doc = fitz.open(str(file_path))
+          
             self.qa_patterns = [
                 "Questions and Answers",
                 "Questions And Answers",
@@ -183,7 +180,10 @@ class PDFProcessor:
 
                             # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
+
                                 if re.search(re.escape(pattern), line_text):
+                                    print(
+                                        f"[DEBUG EXTRACT] Found Q&A pattern: {pattern}")
                                     if line_font_sizes:
                                         print(
                                             f"[DEBUG EXTRACT] Line font sizes: {line_font_sizes}")
@@ -209,25 +209,25 @@ class PDFProcessor:
 
                                             return q_a_page_num
 
-                                        doc.close()
+                                       
 
-            doc.close()
+           
             return None
 
         except Exception as e:
             raise PDFProcessingError(f"Failed to find Q&A section: {str(e)}")
 
-    def extract_text_sections(self, file_path: Path) -> Tuple[str, str]:
+    def extract_text_sections(self, doc: fitz.Document) -> Tuple[str, str]:
 
         try:
-            body_font_size = self.analyze_font_styles(file_path)
+            body_font_size = self.analyze_font_styles(doc)
             print(f"[DEBUG EXTRACT] Body font size: {body_font_size}")
 
             qa_start_page = self.find_qa_section_title(
-                file_path, body_font_size)
+                doc       , body_font_size)
             print(f"[DEBUG EXTRACT] Q&A start page: {qa_start_page}")
 
-            doc = fitz.open(str(file_path))
+           
             presentation_transcript = ""
             q_a_transcript = ""
 
@@ -294,7 +294,7 @@ class PDFProcessor:
                             presentation_transcript = presentation_transcript.strip()[
                                 :-len(last_page_text)].strip()
 
-            doc.close()
+           
             return presentation_transcript.strip(), q_a_transcript.strip()
 
         except Exception as e:
@@ -398,100 +398,39 @@ class PDFProcessor:
             raise PDFProcessingError(
                 f"Failed to open PDF from bytes: {str(e)}")
 
-        # Analyze font sizes to infer body font size (similar to analyze_font_styles)
-        try:
-            font_sizes: List[float] = []
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                blocks = page.get_text("dict")["blocks"]
-                for block in blocks:
-                    if "lines" in block:
-                        for line in block["lines"]:
-                            for span in line["spans"]:
-                                size_val = span.get("size")
-                                if isinstance(size_val, (int, float)) and size_val > 0:
-                                    font_sizes.append(
-                                        round(float(size_val), 1))
-            if not font_sizes:
-                raise PDFProcessingError(
-                    "No valid font sizes found in document")
-            try:
-                body_font_size = mode(font_sizes)
-            except StatisticsError:
-                font_sizes.sort()
-                body_font_size = font_sizes[len(font_sizes) // 2]
+        print("Extracting text sections...")
+        #  Extract both text sections
+        presentation_transcript, q_a_transcript = self.extract_text_sections(
+            doc)
 
-            # Find Q&A start page scanning from end (similar to find_qa_section_title)
-            qa_start_page: Optional[int] = None
-            qa_patterns = [
-                "Questions and Answers",
-                "Questions And Answers",
-                "Question And Answer",
-                "Question and Answer",
-                "Questions & Answers",
-                "Question & Answer",
-            ]
-            for page_num in range(len(doc) - 1, -1, -1):
-                page = doc.load_page(page_num)
-                blocks = page.get_text("dict")["blocks"]
-                for block in blocks:
-                    if "lines" not in block:
-                        continue
-                    for line in block["lines"]:
-                        line_text = "".join(span.get("text", "")
-                                            for span in line.get("spans", []))
-                        line_text = line_text.strip()
-                        line_sizes = [span.get("size") for span in line.get(
-                            "spans", []) if isinstance(span.get("size"), (int, float))]
-                        line_fonts = [str(span.get("font", "")).lower(
-                        ) for span in line.get("spans", []) if span.get("font")]
-                        is_bold = any(("bold" in f or "heavy" in f)
-                                      for f in line_fonts)
-                        for pattern in qa_patterns:
-                            if re.search(re.escape(pattern), line_text):
-                                if line_sizes:
-                                    max_size = max(line_sizes)
-                                    if max_size > body_font_size or (max_size == body_font_size and is_bold):
-                                        qa_start_page = page_num
-                                        break
-                        if qa_start_page is not None:
-                            break
-                if qa_start_page is not None:
-                    break
-
-            # Extract text sections directly from doc
-            presentation_transcript = ""
-            q_a_transcript = ""
-            if qa_start_page is None:
-                for page_num in range(len(doc)):
-                    presentation_transcript += doc.load_page(
-                        page_num).get_text()
-            else:
-                for page_num in range(qa_start_page):
-                    presentation_transcript += doc.load_page(
-                        page_num).get_text()
-                page = doc.load_page(qa_start_page)
-                page_text = page.get_text()
-                qa_start_index = -1
-                lowered = page_text.lower()
-                for pattern in qa_patterns:
-                    idx = lowered.find(pattern.lower())
-                    if idx != -1 and (qa_start_index == -1 or idx < qa_start_index):
-                        qa_start_index = idx
-                if qa_start_index != -1:
-                    presentation_transcript += page_text[:qa_start_index]
-                    q_a_transcript += page_text[qa_start_index:]
-                else:
-                    presentation_transcript += page_text
-                for page_num in range(qa_start_page + 1, len(doc)):
-                    q_a_transcript += doc.load_page(page_num).get_text()
-        finally:
-            doc.close()
-
-        # Validate content (reuse same rules)
+        print("Validating content...")
+        #  Validate content
         self.validate_content(presentation_transcript)
-        if q_a_transcript:
+        if q_a_transcript:  # Only validate Q&A if it exists
             self.validate_content(q_a_transcript)
+
+    
+
+        # DEBUG: Log extracted content details
+        print(
+            f"[DEBUG PDF_PROCESSOR] Processing complete for: {original_filename}")
+        print(
+            f"[DEBUG PDF_PROCESSOR] Presentation length: {len(presentation_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A length: {len(q_a_transcript)}")
+        print(f"[DEBUG PDF_PROCESSOR] Q&A exists: {bool(q_a_transcript)}")
+
+        if presentation_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Presentation preview: {presentation_transcript[:200]}...")
+
+        if q_a_transcript:
+            print(
+                f"[DEBUG PDF_PROCESSOR] Q&A preview: {q_a_transcript[:200]}...")
+        else:
+            print("[DEBUG PDF_PROCESSOR] Q&A transcript is EMPTY!")
+
+        doc.close()
+
 
         return {
             "presentation_transcript": presentation_transcript.strip(),

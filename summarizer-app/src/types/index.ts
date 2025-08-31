@@ -7,16 +7,26 @@ export interface Question {
 }
 
 // Defines the structure for an analyst and their questions
-export interface Analyst {
+export interface AnalystQA {
   name: string
   firm: string
   questions: Question[]
 }
 
 // Defines the shape of the data inside a 'q_a' block
-export interface QaBlockData {
+export interface QABlock {
   title: string
-  analysts: Analyst[]
+  analysts: AnalystQA[]
+}
+
+
+export interface Topic {
+  topic: string
+  question_answers: AnalystQA[]
+}
+export interface QABlockByTopic {
+  title: string
+  topics: Topic[]
 }
 
 // Defines the shape of the data inside an 'overview' block
@@ -25,6 +35,11 @@ export interface OverviewBlockData {
   executives_list: Array<{ executive_name: string; role: string }>
   overview: string
   guidance_outlook?: Array<{
+    period_label: string
+    metric_name: string
+    metric_description: string
+  }>
+  financial_results?: Array<{
     period_label: string
     metric_name: string
     metric_description: string
@@ -91,6 +106,6 @@ export interface SummaryResult {
   blocks: Array<{
     type: "overview" | "q_a_short" | "q_a_long" | "judge"
     // Use our specific types instead of 'any'
-    data: QaBlockData | OverviewBlockData | JudgeBlockData
+    data: QABlock | QABlockByTopic | OverviewBlockData | JudgeBlockData
   }>
 }

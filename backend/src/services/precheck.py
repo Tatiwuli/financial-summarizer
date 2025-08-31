@@ -19,17 +19,19 @@ class PrecheckError(Exception):
 def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
     processor = create_pdf_processor(save_transcripts_dir=TRANSCRIPTS_DIR)
 
-    # Read bytes directly (no temp file)
+    original_filename = (file.filename or "transcript.pdf")
+
+    # Read bytes directly
     pdf_bytes = file.file.read()
     try:
-        # Preserve user-provided filename for deduplication
+        # Preserve user-provided filename
         result = processor.process_pdf_bytes(
-            pdf_bytes, original_filename=(file.filename or None)
+            pdf_bytes, original_filename=original_filename
         )
 
         # DEBUG: Log all keys in the result
-        print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
-        print(f"[DEBUG PRECHECK] Full result: {result}")
+        # print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
+        # print(f"[DEBUG PRECHECK] Full result: {result}")
 
         # DEBUG: Log the extracted content lengths and snippets
         pres_transcript = result.get("presentation_transcript", "")
@@ -75,42 +77,41 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
         },
     }
 
-    # Compute content hash for dedup (normalized simple hash)
+    # Compute content hash (normalized simple hash)
     norm_p = (save_transcript_data["transcripts"]
               ["presentation"] or "").strip()
     norm_q = (save_transcript_data["transcripts"]["q_a"] or "").strip()
     combined = (norm_p + "\n\n" + norm_q).encode("utf-8", errors="ignore")
     content_hash = hashlib.sha256(combined).hexdigest()
 
-    # Disambiguate on collision with different content
-    safe_base = os.path.basename(result.get(
+    # Use the literal original filename for the transcript JSON name
+    base_name = os.path.basename(result.get(
         "original_filename") or "transcript.pdf")
-    safe_base = "".join(
-        c if c.isalnum() or c in ".-_" else "_" for c in safe_base)
-    json_name = os.path.splitext(safe_base)[0] + ".json"
+    json_name = os.path.splitext(base_name)[0] + ".json"
     json_path = os.path.join(TRANSCRIPTS_DIR, json_name)
-
-    # If file exists, check if same content_hash; if different, suffix
-    if os.path.exists(json_path):
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-            if existing.get("content_hash") != content_hash:
-                base_no_ext = os.path.splitext(json_name)[0]
-                json_name = base_no_ext + " (2).json"
-                json_path = os.path.join(TRANSCRIPTS_DIR, json_name)
-        except Exception:
-            # If unreadable, fall back to suffix to avoid overwrite
-            base_no_ext = os.path.splitext(json_name)[0]
-            json_name = base_no_ext + " (2).json"
-            json_path = os.path.join(TRANSCRIPTS_DIR, json_name)
 
     save_transcript_data["content_hash"] = content_hash
     save_transcript_data["transcript_name"] = json_name
 
-    os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(save_transcript_data, f, ensure_ascii=False)
+    # If a JSON with the same literal name exists, compare content hashes
+    # - If equal: reuse existing JSON (skip saving)
+    # - If different or unreadable: overwrite by saving the new JSON
+    reuse_existing = False
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            if existing.get("content_hash") == content_hash:
+                reuse_existing = True
+                print(f"[PRECHECK] Reusing existing transcript: {json_path}")
+        except Exception:
+            # If failed to read the existing file, ignore the error and overwrite it with the new one
+            reuse_existing = False
+
+    if not reuse_existing:  # save it
+        os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(save_transcript_data, f, ensure_ascii=False)
 
     # Output for frontend
     output = {
@@ -119,7 +120,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
         "input": {
             "call_type": call_type,
             "summary_length": summary_length,
-            "filename": result.get("original_filename"),
+            "filename": result.get("original_filename"), #it will be the same with the matched existing file 
         },
         "transcript_name": json_name,
     }

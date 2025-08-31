@@ -1,10 +1,11 @@
-#    /llm_utils: (all are for earning call and conference) summarize_q_a, judge_q_a_summary, write_call_overview
+#    /llm_utils: (all are for earning call and conference) summarize_q_a, judge_q_a_summary, run_overview_workflow
 
 import json
+import logging
 import os
 from src.llm.llm_client import get_llm_client
 from typing import Tuple
-from src.config.runtime import LONG_Q_A_PROMPT_VERSION, JUDGE_PROMPT_VERSION, OVERVIEW_PROMPT_VERSION, EFFORT_LEVEL_Q_A, EFFORT_LEVEL_JUDGE
+from src.config.runtime import JUDGE_PROMPT_VERSION, OVERVIEW_PROMPT_VERSION, EFFORT_LEVEL_Q_A, EFFORT_LEVEL_JUDGE, EFFORT_LEVEL_Q_A_CONFERENCE
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -26,7 +27,7 @@ class Question(BaseModel):
     answer_summary: str
 
 
-class Analyst(BaseModel):
+class AnalystQA(BaseModel):
     name: str
     firm: str
     questions: List[Question]
@@ -34,7 +35,18 @@ class Analyst(BaseModel):
 
 class SummarizeOutputFormat(BaseModel):
     title: str
-    analysts: List[Analyst]
+    analysts: List[AnalystQA]
+
+
+# CONFERENCE CALL OUTPUT FORMAT
+class Topic(BaseModel):
+    topic: str
+    question_answers: List[AnalystQA]  # Reuse the same AnalystQA structure
+
+
+class ConferenceSummarizeOutputFormat(BaseModel):
+    title: str
+    topics: List[Topic]
 
 
 # JUDGE OUTPUT FORMAT - Complete schemas for q_a_summary.json output structure
@@ -84,6 +96,7 @@ class OverviewOutputFormat(BaseModel):
         metric_description: str
 
     guidance_outlook: Optional[List[GuidanceItem]] = None
+    financial_results: Optional[List[GuidanceItem]] = None
 
 
 def load_prompts_summarize():
@@ -91,16 +104,19 @@ def load_prompts_summarize():
     config_dir = os.path.join(os.path.dirname(
         os.path.dirname(__file__)), 'config', 'prompts_summarize')
 
-    with open(os.path.join(config_dir, 'short_q_a.json'), 'r') as f:
+    with open(os.path.join(config_dir, 'short_q_a.json'), 'r', encoding='utf-8') as f:
         short_q_a_prompt = json.load(f)
 
-    with open(os.path.join(config_dir, 'long_q_a.json'), 'r') as f:
+    with open(os.path.join(config_dir, 'long_q_a.json'), 'r', encoding='utf-8') as f:
         long_q_a_prompt = json.load(f)
 
-    with open(os.path.join(config_dir, 'overview.json'), 'r') as f:
+    with open(os.path.join(config_dir, 'long_conference.json'), 'r', encoding='utf-8') as f:
+        conference_q_a_prompt = json.load(f)
+
+    with open(os.path.join(config_dir, 'overview.json'), 'r', encoding='utf-8') as f:
         overview_prompt = json.load(f)
 
-    return short_q_a_prompt, long_q_a_prompt, overview_prompt
+    return short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt
 
 
 def load_prompts_judge():
@@ -113,37 +129,109 @@ def load_prompts_judge():
     return q_a_summary_prompt
 
 
-short_q_a_prompt, long_q_a_prompt, overview_prompt = load_prompts_summarize()
+short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt = load_prompts_summarize()
 q_a_summary_prompt = load_prompts_judge()
 
+logger = logging.getLogger("llm_utils")
 
-def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_Q_A, text_format=SummarizeOutputFormat) -> dict:
 
-    print("Calling Summarize Q&A")
+def _ensure_dict(obj, context: str) -> dict:
+    if not isinstance(obj, dict):
+        raise PromptConfigError(
+            f"Expected a dict for {context}, got {type(obj).__name__}")
+    return obj
+
+
+def _require_str(d: dict, key: str, context: str) -> str:
+    value = d.get(key)
+    if not isinstance(value, str):
+        raise PromptConfigError(f"Missing or invalid '{key}' in {context}")
+    return value
+
+
+def _require_params_max_tokens(d: dict, context: str) -> int:
+    params = d.get("parameters")
+    if not isinstance(params, dict):
+        raise PromptConfigError(
+            f"Missing or invalid 'parameters' in {context}")
+    max_tokens = params.get("max_output_tokens")
+    if not isinstance(max_tokens, int):
+        raise PromptConfigError(
+            f"Missing or invalid 'max_output_tokens' in {context}")
+    return max_tokens
+
+
+def _require_output_structure(d: dict, context: str) -> str:
+    structure = d.get("output_structure")
+    if not isinstance(structure, dict):
+        raise PromptConfigError(
+            f"Missing or invalid 'output_structure' in {context}")
+    # Ensure JSON-valid preview inside prompt, not Python dict repr
+    return json.dumps(structure, ensure_ascii=False)
+
+
+def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_Q_A, text_format=None) -> dict:
+
+    logger.info("Calling Summarize Q&A")
     llm_client = get_llm_client(model)
 
-    if summary_length == "short":
-        short_q_a_prompts = short_q_a_prompt.get(
-            "Q_A_SHORT_SUMMARY").get(prompt_version)
+    # Select the appropriate Pydantic model based on call type
+    if text_format is None:
+        if call_type == "conference":
+            text_format = ConferenceSummarizeOutputFormat
+        else:
+            text_format = SummarizeOutputFormat
 
-        system_prompt = short_q_a_prompts.get("system_prompt")
-        user_prompt = short_q_a_prompts.get("user_prompt")
-        output_structure = short_q_a_prompts.get("output_structure")
-        max_output_tokens = short_q_a_prompts.get(
-            "parameters").get("max_output_tokens")
+    if call_type == "conference":
+        # Conference calls use the long_conference.json file
+        conference_section = _ensure_dict(conference_q_a_prompt.get(
+            "LONG_CONFERENCE_SUMMARY"), "long_conference.json -> LONG_CONFERENCE_SUMMARY")
+        prompts = _ensure_dict(conference_section.get(
+            prompt_version), f"long_conference.json -> LONG_CONFERENCE_SUMMARY['{prompt_version}']")
+        system_prompt = _require_str(
+            prompts, "system_prompt", "conference Q&A prompts")
+        user_prompt = _require_str(
+            prompts, "user_prompt", "conference Q&A prompts")
+        output_structure_json = _require_output_structure(
+            prompts, "conference Q&A prompts")
+        max_output_tokens = _require_params_max_tokens(
+            prompts, "conference Q&A prompts")
+        effort_level = EFFORT_LEVEL_Q_A_CONFERENCE
+    else:
+        effort_level = EFFORT_LEVEL_Q_A
+        # Earnings calls use short_q_a.json or long_q_a.json based on summary_length
+        if summary_length == "short":
+            short_section = _ensure_dict(short_q_a_prompt.get(
+                "Q_A_SHORT_SUMMARY"), "short_q_a.json -> Q_A_SHORT_SUMMARY")
+            prompts = _ensure_dict(short_section.get(
+                prompt_version), f"short_q_a.json -> Q_A_SHORT_SUMMARY['{prompt_version}']")
+            system_prompt = _require_str(
+                prompts, "system_prompt", "short Q&A prompts")
+            user_prompt = _require_str(
+                prompts, "user_prompt", "short Q&A prompts")
+            output_structure_json = _require_output_structure(
+                prompts, "short Q&A prompts")
+            max_output_tokens = _require_params_max_tokens(
+                prompts, "short Q&A prompts")
+           
 
-    elif summary_length == "long":
-        long_q_a_prompts = long_q_a_prompt.get(
-            "Q_A_SUMMARY").get(prompt_version)
-        system_prompt = long_q_a_prompts.get("system_prompt")
-        user_prompt = long_q_a_prompts.get("user_prompt")
-        output_structure = long_q_a_prompts.get("output_structure")
-        max_output_tokens = long_q_a_prompts.get(
-            "parameters").get("max_output_tokens")
+        elif summary_length == "long":
+            long_section = _ensure_dict(long_q_a_prompt.get(
+                "Q_A_SUMMARY"), "long_q_a.json -> Q_A_SUMMARY")
+            prompts = _ensure_dict(long_section.get(
+                prompt_version), f"long_q_a.json -> Q_A_SUMMARY['{prompt_version}']")
+            system_prompt = _require_str(
+                prompts, "system_prompt", "long Q&A prompts")
+            user_prompt = _require_str(
+                prompts, "user_prompt", "long Q&A prompts")
+            output_structure_json = _require_output_structure(
+                prompts, "long Q&A prompts")
+            max_output_tokens = _require_params_max_tokens(
+                prompts, "long Q&A prompts")
 
     processed_user_prompt = user_prompt.format(TRANSCRIPT=qa_transcript)
     processed_system_prompt = system_prompt.format(
-        OUTPUT_STRUCTURE=output_structure, CALL_TYPE=call_type)
+        OUTPUT_STRUCTURE=output_structure_json, CALL_TYPE=call_type)
 
     # error de output eh feito ja no llm client
     llm_response = llm_client.generate(
@@ -171,7 +259,7 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         "summary_length": summary_length,
         "prompt_version": prompt_version,
         "effort_level": effort_level,
-        "summary_structure": output_structure,
+        "summary_structure": json.loads(output_structure_json),
         "call_type": call_type,
         "max_output_tokens": max_output_tokens,
         "input_tokens": llm_response.input_tokens,
@@ -188,36 +276,42 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         "metadata": metadata
     }
 
-    print(f"-------------Q&A SUMMARY FOR {call_type}-------------")
-    print("Finish reason: ", llm_response.finish_reason)
-    print("Raw response: ", llm_response.raw)
-    print("----------------------------------------------------------------------")
-    print(f"--------------------------- START OF SUMMARY--------------------------------")
-    print(summary_text)
-    print(f"--------------------------- END OF SUMMARY--------------------------------")
+    logger.info(f"-------------Q&A SUMMARY FOR {call_type}-------------")
+    logger.info(f"Finish reason: {llm_response.finish_reason}")
+    logger.debug(f"Raw response: {llm_response.raw}")
+    logger.info(
+        "----------------------------------------------------------------------")
+    logger.info(
+        "--------------------------- START OF SUMMARY--------------------------------")
+    logger.info(summary_text)
+    logger.info(
+        "--------------------------- END OF SUMMARY--------------------------------")
 
     return final_output
 
 
 def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_JUDGE, text_format=JudgeOutputFormat) -> dict:
 
-    # print("Calling Judge Q&A Summary")
+    # logger.info("Calling Judge Q&A Summary")
     llm_client = get_llm_client(model)
 
-    judge_q_a_summary_prompts = q_a_summary_prompt.get(
-        "Q_A_LLM_JUDGE").get(prompt_version)
+    judge_section = _ensure_dict(q_a_summary_prompt.get(
+        "Q_A_LLM_JUDGE"), "q_a_summary.json -> Q_A_LLM_JUDGE")
+    prompts = _ensure_dict(judge_section.get(
+        prompt_version), f"q_a_summary.json -> Q_A_LLM_JUDGE['{prompt_version}']")
 
-    system_prompt = judge_q_a_summary_prompts.get("system_prompt")
-    user_prompt = judge_q_a_summary_prompts.get("user_prompt")
-    output_structure = judge_q_a_summary_prompts.get("output_structure")
-    max_output_tokens = judge_q_a_summary_prompts.get(
-        "parameters").get("max_output_tokens")
+    system_prompt = _require_str(prompts, "system_prompt", "judge Q&A prompts")
+    user_prompt = _require_str(prompts, "user_prompt", "judge Q&A prompts")
+    output_structure_json = _require_output_structure(
+        prompts, "judge Q&A prompts")
+    max_output_tokens = _require_params_max_tokens(
+        prompts, "judge Q&A prompts")
 
     processed_user_prompt = user_prompt.format(
         TRANSCRIPT=transcript, SUMMARY=q_a_summary, SUMMARY_STRUCTURE=summary_structure)
 
     processed_system_prompt = system_prompt.format(
-        OUTPUT_STRUCTURE=output_structure)
+        OUTPUT_STRUCTURE=output_structure_json)
 
     llm_response = llm_client.generate(
 
@@ -257,41 +351,41 @@ def judge_q_a_summary(transcript: str, q_a_summary: str, summary_structure: str,
         "metadata": metadata
     }
 
-    print(f"-------------EVALUATION OF Q&A SUMMARY -------------")
-
-    print("Finish reason: ", llm_response.finish_reason)
-    print("Raw response: ", llm_response.raw)
-    print("----------------------------------------------------------------------")
-    print(f"--------------------------- START OF EVALUATION RESULTS --------------------------------")
-    print(eval_results_text)
-    print(f"--------------------------- END OF EVALUATION RESULTS --------------------------------")
+    logger.info("-------------EVALUATION OF Q&A SUMMARY -------------")
+    logger.info(f"Finish reason: {llm_response.finish_reason}")
+    logger.debug(f"Raw response: {llm_response.raw}")
+    logger.info(
+        "----------------------------------------------------------------------")
+    logger.info(
+        "--------------------------- START OF EVALUATION RESULTS --------------------------------")
+    logger.info(eval_results_text)
+    logger.info(
+        "--------------------------- END OF EVALUATION RESULTS --------------------------------")
 
     return final_output
 
 
-def write_call_overview(presentation_transcript: str, q_a_summary: str, call_type: str, prompt_version=OVERVIEW_PROMPT_VERSION, model="gpt-5-mini", text_format=OverviewOutputFormat) -> dict:
+def run_overview_workflow(presentation_transcript: str, q_a_summary: str, call_type: str, prompt_version=OVERVIEW_PROMPT_VERSION, model="gpt-5-mini", text_format=OverviewOutputFormat) -> dict:
 
-    print("Calling Write Call Overview")
+    logger.info("Calling Write Call Overview")
     llm_client = get_llm_client(model)
 
-    overview_section = overview_prompt.get("OVERVIEW")
-    if not isinstance(overview_section, dict):
-        raise PromptConfigError("OVERVIEW section not found in overview.json")
-    write_call_overview_prompts = overview_section.get(prompt_version)
-    if not isinstance(write_call_overview_prompts, dict):
-        available = ", ".join(list(overview_section.keys()))
-        raise PromptConfigError(
-            f"Overview prompt version '{prompt_version}' not found. Available: {available}"
-        )
+    overview_section = _ensure_dict(overview_prompt.get(
+        "OVERVIEW"), "overview.json -> OVERVIEW")
+    write_call_overview_prompts = _ensure_dict(overview_section.get(
+        prompt_version), f"overview.json -> OVERVIEW['{prompt_version}']")
 
-    system_prompt = write_call_overview_prompts.get("system_prompt")
-    user_prompt = write_call_overview_prompts.get("user_prompt")
-    output_structure = write_call_overview_prompts.get("output_structure")
-    max_output_tokens = write_call_overview_prompts.get(
-        "parameters").get("max_output_tokens")
+    system_prompt = _require_str(
+        write_call_overview_prompts, "system_prompt", "overview prompts")
+    user_prompt = _require_str(
+        write_call_overview_prompts, "user_prompt", "overview prompts")
+    output_structure_json = _require_output_structure(
+        write_call_overview_prompts, "overview prompts")
+    max_output_tokens = _require_params_max_tokens(
+        write_call_overview_prompts, "overview prompts")
 
     processed_system_prompt = system_prompt.format(
-        CALL_TYPE=call_type, OUTPUT_STRUCTURE=output_structure)
+        CALL_TYPE=call_type, OUTPUT_STRUCTURE=output_structure_json)
     processed_user_prompt = user_prompt.format(
         TRANSCRIPT=presentation_transcript, Q_A_SUMMARY=q_a_summary)
 
@@ -301,6 +395,14 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
         max_output_tokens=max_output_tokens,
         text_format=text_format
     )
+
+    if llm_response.finish_reason == 'length' or llm_response.finish_reason == 'max_tokens':
+        logger.error(
+            f"Overview generation stopped due to token limit. Finish reason: {llm_response.finish_reason}")
+
+        raise LLMGenerationError(
+            f"Overview generation failed: The response was truncated because it reached the maximum token limit of {max_output_tokens}."
+        )
 
     rounded_time = None
     try:
@@ -329,14 +431,16 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
         "metadata": metadata
     }
 
-    print(f"-------------CALL OVERVIEW FOR {call_type}-------------")
-
-    print("Finish reason: ", llm_response.finish_reason)
-    print("Raw response: ", llm_response.raw)
-    print("----------------------------------------------------------------------")
-    print(f"--------------------------- START OF CALL OVERVIEW --------------------------------")
-    print(overview_text)
-    print(f"--------------------------- END OF CALL OVERVIEW --------------------------------")
+    logger.info(f"-------------CALL OVERVIEW FOR {call_type}-------------")
+    logger.info(f"Finish reason: {llm_response.finish_reason}")
+    logger.debug(f"Raw response: {llm_response.raw}")
+    logger.info(
+        "----------------------------------------------------------------------")
+    logger.info(
+        "--------------------------- START OF CALL OVERVIEW --------------------------------")
+    logger.info(overview_text)
+    logger.info(
+        "--------------------------- END OF CALL OVERVIEW --------------------------------")
 
     return final_output
 
@@ -355,7 +459,7 @@ def write_call_overview(presentation_transcript: str, q_a_summary: str, call_typ
 # }
 
 
-# write_call_overview(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")
+# run_overview_workflow(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")
 
 
 # if __name__ == "__main__":
