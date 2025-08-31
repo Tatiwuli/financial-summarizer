@@ -226,6 +226,21 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
     results: Dict[str, Any] = {}
     errors: Dict[str, Exception] = {}
 
+    # Run overview and update the status
+    def run_overview():
+        if job_dir:
+            _update_status(job_dir, {
+                "stages": {"overview_summary": "running"},
+                "percent_complete": 55,
+                "current_stage": "overview_summary",
+                "updated_at": _now(),
+            })
+        return run_overview_workflow(
+            presentation_transcript=presentation_transcript or "The call didn't have a presentation section. Refer to the Q&A summary instead",
+            q_a_summary=qa_summary_text,
+            call_type=call_type,
+        )
+
     # Run judge and update the status
     def run_judge():
         if job_dir:
@@ -243,27 +258,16 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
             summary_structure=summary_metadata.get("summary_structure") or {},
         )
 
-    # Run overview and update the status
-    def run_overview():
-        if job_dir:
-            _update_status(job_dir, {
-                "stages": {"overview_summary": "running"},
-                "updated_at": _now(),
-            })
-        return run_overview_workflow(
-            presentation_transcript=presentation_transcript or "The call didn't have a presentation section. Refer to the Q&A summary instead",
-            q_a_summary=qa_summary_text,
-            call_type=call_type,
-        )
-
+    
     # Run judge and overview in parallel and write outputs as each completes
     from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
     timeout_seconds = 4 * 60
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_to_key = {
-            executor.submit(run_judge): "judge",
             executor.submit(run_overview): "overview",
+            executor.submit(run_judge): "judge",
+            
         }
 
         pending = set(future_to_key.keys())

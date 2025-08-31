@@ -1,7 +1,7 @@
 // app/index.tsx
 
 import React from "react"
-import { useSummaryStore } from "./src/state/SummaryStoreTest"
+import { useSummaryStore } from "./src/state/SummaryStore"
 import { UploadScreen } from "./src/screens/UploadScreen"
 import { LoadingScreen } from "./src/screens/LoadingScreen"
 import { ResultScreen } from "./src/screens/ResultScreen"
@@ -29,7 +29,7 @@ const App = () => {
     content = <UploadScreen />
   }
 
-        return <SafeAreaProvider>{content}</SafeAreaProvider>
+  return <SafeAreaProvider>{content}</SafeAreaProvider>
 }
 
 export default App

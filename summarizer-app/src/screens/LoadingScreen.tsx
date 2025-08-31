@@ -1,5 +1,3 @@
-// src/screens/LoadingScreen.tsx
-
 import React from "react"
 import {
   View,
@@ -9,7 +7,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native"
-import { useSummaryStore } from "../state/SummaryStoreTest"
+import { useSummaryStore } from "../state/SummaryStore"
 
 export const LoadingScreen = () => {
   const { stage, percentComplete, warnings, cancel } = useSummaryStore()
