@@ -43,7 +43,7 @@
         },
       "parameters": {
         "temperature": 0,
-        "max_output_tokens": 5000
+        "max_output_tokens": 9000
       }
     }
   }

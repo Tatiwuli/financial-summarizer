@@ -1,11 +1,8 @@
 from fastapi import FastAPI, status, Request, File, Form, UploadFile
-from fastapi import BackgroundTasks
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from src.services.precheck import PrecheckError, run_validate_file
 from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow_from_saved_transcripts
+from src.services.job_utils import _get_lock_for_job
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
@@ -353,10 +350,10 @@ async def validate_file_endpoint(
         content_hash = (transcript_doc or {}).get("content_hash")
         if content_hash:
             # Build prompt signature (include Q&A prompt based on call_type and summary_length, plus Overview and Judge)
-           
+
             if call_type.lower() == "conference":
                 q_a_prompt_ver = (
-                   CONFERENCE_LONG_Q_A_PROMPT_VERSION
+                    CONFERENCE_LONG_Q_A_PROMPT_VERSION
                 )
             else:
                 # Default to earnings settings for earnings or unknown call types
@@ -454,10 +451,10 @@ async def validate_file_endpoint(
             transcript_json_for_index) or {}
         ch = transcript_doc_for_index.get("content_hash")
         if ch:
-            
+
             if call_type.lower() == "conference":
                 q_a_prompt_ver_idx = (
-                   CONFERENCE_LONG_Q_A_PROMPT_VERSION
+                    CONFERENCE_LONG_Q_A_PROMPT_VERSION
                 )
             else:
                 # Default to earnings settings for earnings or unknown call types

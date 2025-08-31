@@ -6,31 +6,14 @@ import {
   cancelJob,
 } from "../services/api"
 import axios from "axios"
+import {
+  SummaryState,
+  SummaryStatus,
+  ValidationState,
+  SummaryResult,
+} from "../types"
 
-interface SummaryState {
-  status: "idle" | "validating" | "validated" | "loading" | "success" | "error"
-  error: string | null
-  result: any | null
-  validation: {
-    isValidated: boolean
-    filename?: string
-    validatedAt?: string
-  } | null
-  jobId?: string | null
-  transcriptName?: string | null
-  stage?: string | null
-  percentComplete?: number | null
-  warnings?: string[]
-  stages?: Record<string, string> | null
-  currentCallType?: "earnings" | "conference"
-  cancel: () => Promise<void>
-  summarize: (
-    file: any,
-    callType: string,
-    summaryLength: string
-  ) => Promise<void>
-  reset: () => void
-}
+// Remove duplicate interface - using imported SummaryState from types
 
 // ------- CODES FOR PERSISTING FRONTEND STATE WHEN USER REFRESHES THE PAGE -------
 // Web-only persistence using localStorage
@@ -88,9 +71,10 @@ const clearPersistedState = () => {
 export const useSummaryStore = create<SummaryState>((set) => {
   const persisted = loadPersistedState() // Always load the last state from the browser
 
-  const initialStatus: SummaryState["status"] = persisted?.status || "idle" // Restore status from previous session
-  const initialValidation = persisted?.validation || null // Restore validation from previous session
-  const initialResult = persisted?.result || null // Restore result from previous session
+  const initialStatus: SummaryStatus = persisted?.status || "idle" // Restore status from previous session
+  const initialValidation: ValidationState | null =
+    persisted?.validation || null // Restore validation from previous session
+  const initialResult: SummaryResult | null = persisted?.result || null // Restore result from previous session
   const initialCallType = persisted?.currentCallType || undefined // Restore call type from previous session
 
   return {
@@ -132,7 +116,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
       })
       clearPersistedState()
     },
-    summarize: async (file, callType, summaryLength) => {
+    summarize: async (file: any, callType: string, summaryLength: string) => {
       // Start validation flow
       set({
         status: "validating",

@@ -11,7 +11,7 @@ import * as DocumentPicker from "expo-document-picker"
 
 import { ToggleButton } from "../components/common/ToggleButton"
 
-import { useSummaryStore } from "../state/SummaryStoreTest"
+import { useSummaryStore } from "../state/SummaryStore"
 
 type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
@@ -71,7 +71,6 @@ export const UploadScreen: React.FC = () => {
     }
   }
 
-
   //Submit file to backend
 
   const handleSubmitFile = async () => {
@@ -86,8 +85,7 @@ export const UploadScreen: React.FC = () => {
     } catch (e) {
       console.error("[UploadScreen] handleSubmitFile error:", e)
     }
-  } 
-  
+  }
 
   // Render the UI
   return (
@@ -103,11 +101,11 @@ export const UploadScreen: React.FC = () => {
             onPress={() => setCallType("earnings")}
           />
           {
-          <ToggleButton
-            label="Conference Call"
-            isActive={callType === "conference"}
-            onPress={() => setCallType("conference")}
-          />
+            <ToggleButton
+              label="Conference Call"
+              isActive={callType === "conference"}
+              onPress={() => setCallType("conference")}
+            />
           }
         </View>
 

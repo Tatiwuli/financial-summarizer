@@ -1,4 +1,4 @@
-import { useSummaryStore } from "../state/SummaryStoreTest"
+import { useSummaryStore } from "../state/SummaryStore"
 import {
   SafeAreaView,
   ScrollView,
@@ -37,28 +37,20 @@ import * as pdfFonts from "pdfmake/build/vfs_fonts"
 ;(pdfMake as any).vfs = pdfFonts as any
 
 export const ResultScreen = () => {
-  const { result, reset, stage, percentComplete, stages, currentCallType } =
-    useSummaryStore()
+  const {
+    result,
+    reset,
+    stage,
+    percentComplete,
+    stages,
+    currentCallType,
+    validation,
+  } = useSummaryStore()
   const insets = useSafeAreaInsets()
   const [footerHeight, setFooterHeight] = useState(0)
 
   const reportBlockRef = useRef<any>(null)
   const spinValue = useRef(new Animated.Value(0)).current
-
-  // Spinning animation for loading
-  useEffect(() => {
-    if (stages && stages["summary_evaluation"] === "processing") {
-      const spinAnimation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      )
-      spinAnimation.start()
-      return () => spinAnimation.stop()
-    }
-  }, [stages, spinValue])
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
@@ -105,6 +97,26 @@ export const ResultScreen = () => {
 
   const summaryMeta = qaBlockEntry?.metadata
   const overviewMeta = overviewBlockEntry?.metadata
+
+  // Spinning animation for loading
+  useEffect(() => {
+    const shouldSpin =
+      (stages && stages["summary_evaluation"] === "processing") ||
+      ((!judgeBlocks || judgeBlocks.length === 0) &&
+        (!stages || stages["summary_evaluation"] !== "failed"))
+
+    if (shouldSpin) {
+      const spinAnimation = Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      )
+      spinAnimation.start()
+      return () => spinAnimation.stop()
+    }
+  }, [stages, spinValue, judgeBlocks])
 
   // Helper function to generate a PDF report (text-preserving via browser print)
   const handleSavePdf = async () => {
@@ -236,7 +248,13 @@ export const ResultScreen = () => {
       }
 
       await new Promise((resolve) => setTimeout(resolve, 0))
-      pdfMake.createPdf(docDefinition).download("report.pdf")
+
+      // Generate filename based on original file
+      const originalFilename = validation?.filename || "document"
+      const baseName = originalFilename.replace(/\.pdf$/i, "") // Remove .pdf extension
+      const summaryFilename = `${baseName}_Summary.pdf`
+
+      pdfMake.createPdf(docDefinition).download(summaryFilename)
       setPdfMessage("PDF downloaded!")
       setTimeout(() => setPdfMessage(null), 1500)
     } catch (err) {
@@ -833,20 +851,22 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
             </View>
           </View>
 
-          {/* Show loading state if judge evaluation is still processing */}
-          {stages && stages["summary_evaluation"] === "processing" && (
-            <View style={styles.loadingContainer}>
-              <Animated.View
-                style={[
-                  styles.loadingSpinner,
-                  { transform: [{ rotate: spin }] },
-                ]}
-              >
-                <Ionicons name="refresh" size={24} color="#007AFF" />
-              </Animated.View>
-              <Text style={styles.loadingText}>Loading evaluation...</Text>
-            </View>
-          )}
+          {/* Show loading state if judge evaluation is still processing or not available yet */}
+          {(stages && stages["summary_evaluation"] === "processing") ||
+            ((!judgeBlocks || judgeBlocks.length === 0) &&
+              (!stages || stages["summary_evaluation"] !== "failed") && (
+                <View style={styles.loadingContainer}>
+                  <Animated.View
+                    style={[
+                      styles.loadingSpinner,
+                      { transform: [{ rotate: spin }] },
+                    ]}
+                  >
+                    <Ionicons name="refresh" size={24} color="#007AFF" />
+                  </Animated.View>
+                  <Text style={styles.loadingText}>Loading evaluation...</Text>
+                </View>
+              ))}
 
           {/* Show judge evaluation when available */}
           {judgeBlocks && judgeBlocks.length > 0 && (
@@ -946,25 +966,51 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
 
               {/* Evaluation Metadata */}
               <Text style={styles.h3}>Evaluation Metadata</Text>
-              {judgeBlocks.map(({ metadata }, i) => (
-                <View key={i} style={styles.metadataSection}>
+              {(stages && stages["summary_evaluation"] === "processing") ||
+              ((!judgeBlocks || judgeBlocks.length === 0) &&
+                (!stages || stages["summary_evaluation"] !== "failed")) ? (
+                <View style={styles.metadataSection}>
+                  <View style={[styles.loadingContainer, { padding: 10 }]}>
+                    <Animated.View
+                      style={[
+                        styles.loadingSpinner,
+                        { transform: [{ rotate: spin }] },
+                      ]}
+                    >
+                      <Ionicons name="refresh" size={20} color="#007AFF" />
+                    </Animated.View>
+                    <Text style={[styles.loadingText, { fontSize: 14 }]}>
+                      Loading evaluation metadata...
+                    </Text>
+                  </View>
+                </View>
+              ) : stages && stages["summary_evaluation"] === "failed" ? (
+                <View style={styles.metadataSection}>
                   <Text style={styles.metadataDetail}>
-                    Model: {metadata?.model ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Effort-level: {metadata?.effort_level ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Duration: {formatDuration(metadata?.time)}
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Input tokens: {metadata?.input_tokens ?? "Not provided"}
-                  </Text>
-                  <Text style={styles.metadataDetail}>
-                    Output tokens: {metadata?.output_tokens ?? "Not provided"}
+                    Evaluation unavailable
                   </Text>
                 </View>
-              ))}
+              ) : (
+                judgeBlocks.map(({ metadata }, i) => (
+                  <View key={i} style={styles.metadataSection}>
+                    <Text style={styles.metadataDetail}>
+                      Model: {metadata?.model ?? "Not provided"}
+                    </Text>
+                    <Text style={styles.metadataDetail}>
+                      Effort-level: {metadata?.effort_level ?? "Not provided"}
+                    </Text>
+                    <Text style={styles.metadataDetail}>
+                      Duration: {formatDuration(metadata?.time)}
+                    </Text>
+                    <Text style={styles.metadataDetail}>
+                      Input tokens: {metadata?.input_tokens ?? "Not provided"}
+                    </Text>
+                    <Text style={styles.metadataDetail}>
+                      Output tokens: {metadata?.output_tokens ?? "Not provided"}
+                    </Text>
+                  </View>
+                ))
+              )}
             </View>
           )}
         </View>
