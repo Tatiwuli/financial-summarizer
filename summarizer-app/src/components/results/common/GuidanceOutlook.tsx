@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   metricDescription: {
-    fontSize: 12,
-    color: "#666",
+    fontSize: 14,
+    color: "#000000",
     marginLeft: 8,
   },
   noDataText: {
