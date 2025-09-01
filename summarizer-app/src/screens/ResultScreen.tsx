@@ -198,10 +198,27 @@ export const ResultScreen = () => {
               bold: true,
               margin: [0, 6, 0, 2],
             })
-            const items: string[] = []
+            const items: any[] = []
             a.questions.forEach((q) => {
-              items.push(`Q: ${q.question || "Not provided"}`)
-              items.push(`A: ${q.answer_summary || "Not provided"}`)
+              items.push({
+                text: [
+                  { text: "Q: ", bold: true, color: "#1a365d" },
+                  {
+                    text: q.question || "Not provided",
+                    bold: true,
+                    color: "#1a365d",
+                  },
+                ],
+              })
+              items.push({
+                text: [
+                  { text: "A: ", color: "#000000" },
+                  {
+                    text: q.answer_summary || "Not provided",
+                    color: "#000000",
+                  },
+                ],
+              })
             })
             content.push({ ul: items })
           })
@@ -223,10 +240,28 @@ export const ResultScreen = () => {
                 bold: true,
                 margin: [0, 4, 0, 2],
               })
-              const items: string[] = []
+              const items: any[] = []
               analyst.questions.forEach((q) => {
-                items.push(`Q: ${q.question || "Not provided"}`)
-                items.push(`A: ${q.answer_summary || "Not provided"}`)
+                items.push({
+                  text: [
+                    { text: "Q: ", bold: true, color: "#1a365d" },
+                    {
+                      text: q.question || "Not provided",
+                      bold: true,
+                      color: "#1a365d",
+                    },
+                  ],
+                })
+                items.push({
+                  text: [
+                    { text: "A: ", bold: true, color: "#000000" },
+                    {
+                      text: q.answer_summary || "Not provided",
+                      
+                      color: "#000000",
+                    },
+                  ],
+                })
               })
               content.push({ ul: items })
             })
@@ -414,11 +449,11 @@ export const ResultScreen = () => {
                 a.questions
                   .map(
                     (q) =>
-                      `<li><strong>Q:</strong> ${
+                      `<li><strong style="color: #1a365d;">Q:</strong> <span style="color: #1a365d; font-weight: bold;">${
                         q.question || "Not provided"
-                      }<br/><strong>A:</strong> ${
+                      }</span><br/><strong style="color: #000000;">A:</strong> <span style="color: #000000; ;">${
                         q.answer_summary || "Not provided"
-                      }</li>`
+                      }</span></li>`
                   )
                   .join("") +
                 `</ul>`
@@ -461,11 +496,11 @@ export const ResultScreen = () => {
                       analyst.questions
                         .map(
                           (q) =>
-                            `<strong>Q:</strong> ${
+                            `<strong style="color: #1a365d;">Q:</strong> <span style="color: #1a365d; font-weight: bold;">${
                               q.question || "Not provided"
-                            }<br/><strong>A:</strong> ${
+                            }</span><br/><strong style="color: #000000;">A:</strong> <span style="color: #000000; ;">${
                               q.answer_summary || "Not provided"
-                            }`
+                            }</span>`
                         )
                         .join("<br/>")
                   )

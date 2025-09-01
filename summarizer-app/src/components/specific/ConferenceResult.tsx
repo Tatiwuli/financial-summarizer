@@ -82,10 +82,16 @@ export const ConferenceResult: React.FC<ConferenceResultProps> = ({
                   {analyst.questions.map((question, questionIndex) => (
                     <View key={questionIndex} style={styles.questionContainer}>
                       <Text style={styles.questionText}>
-                        Q: {question.question}
+                        <Text style={styles.questionLabel}>Q: </Text>
+                        <Text style={styles.questionContent}>
+                          {question.question}
+                        </Text>
                       </Text>
                       <Text style={styles.answerText}>
-                        A: {question.answer_summary}
+                        <Text style={styles.answerLabel}>A: </Text>
+                        <Text style={styles.answerContent}>
+                          {question.answer_summary}
+                        </Text>
                       </Text>
                     </View>
                   ))}
@@ -153,7 +159,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 4,
-    color: "#000000",
+
   },
   answerText: {
     fontSize: 14,
@@ -194,5 +200,21 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 6,
     color: "#333",
+  },
+  questionLabel: {
+    fontWeight: "bold",
+    color: "#1a365d",
+  },
+  questionContent: {
+    fontWeight: "bold",
+    color: "#1a365d",
+  },
+  answerLabel: {
+    fontWeight: "bold",
+    color: "#000000",
+  },
+  answerContent: {
+
+    color: "#000000",
   },
 })
