@@ -7,17 +7,9 @@ import os
 import logging
 
 
-from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, run_overview_workflow
+from src.llm.llm_utils import summarize_q_a, judge_q_a_summary, run_overview_workflow, get_prompt_config
 from src.config.runtime import (
-    EARNINGS_SHORT_Q_A_PROMPT_VERSION,
-    EARNINGS_LONG_Q_A_PROMPT_VERSION,
-
-    CONFERENCE_LONG_Q_A_PROMPT_VERSION,
-    EFFORT_LEVEL_Q_A,
-    EFFORT_LEVEL_Q_A_CONFERENCE,
-    Q_A_MODEL,
-    CONFERENCE_Q_A_MODEL,
-    TRANSCRIPTS_DIR
+    TRANSCRIPTS_DIR,
 )
 
 from pydantic import ValidationError
@@ -33,7 +25,7 @@ class SummaryWorkflowError(Exception):
         self.message = message
 
 
-def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type: str, summary_length: str, job_dir: Optional[str] = None, cancel_event: Optional[threading.Event] = None):
+def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type: str, summary_length: str, job_dir: Optional[str] = None, cancel_event: Optional[threading.Event] = None, answer_format: str = "prose"):
     """
     Execute the summary workflow using transcripts previously saved by validation
 
@@ -62,24 +54,11 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
     blocks: list[dict[str, Any]] = []
     validated_overview = None
 
-    # Determine prompt version and model based on call type
-
-    if call_type.lower() == "conference":
-        if summary_length == "long":
-            prompt_version = CONFERENCE_LONG_Q_A_PROMPT_VERSION
-        else:
-            print("Conference doesn't have a short version. Defaulting to long")
-            prompt_version = CONFERENCE_LONG_Q_A_PROMPT_VERSION
-        model = CONFERENCE_Q_A_MODEL
-        effort_level = EFFORT_LEVEL_Q_A_CONFERENCE
-    else:
-        #    Default to earnings settings for unknown call types
-        if summary_length == "short":
-            prompt_version = EARNINGS_SHORT_Q_A_PROMPT_VERSION
-        else:
-            prompt_version = EARNINGS_LONG_Q_A_PROMPT_VERSION
-        model = Q_A_MODEL
-        effort_level = EFFORT_LEVEL_Q_A
+    # Get prompt configuration from llm utils
+    prompt_config = get_prompt_config(call_type, summary_length, answer_format)
+    prompt_version = prompt_config["prompt_version"]
+    model = prompt_config["model"]
+    effort_level = prompt_config["effort_level"]
 
     # If jobs_dir exists , record status
     # After validation , the q_a summary is running
@@ -114,6 +93,7 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
             prompt_version=prompt_version,
             model=model,
             effort_level=effort_level,
+            answer_format=answer_format,
         )
 
         # Get and organize the responses
@@ -239,9 +219,12 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
             presentation_transcript=presentation_transcript or "The call didn't have a presentation section. Refer to the Q&A summary instead",
             q_a_summary=qa_summary_text,
             call_type=call_type,
+
+
         )
 
     # Run judge and update the status
+
     def run_judge():
         if job_dir:
             _update_status(job_dir, {
@@ -258,16 +241,15 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
             summary_structure=summary_metadata.get("summary_structure") or {},
         )
 
-    
     # Run judge and overview in parallel and write outputs as each completes
     from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-    timeout_seconds = 4 * 60
+    timeout_seconds = 5 * 60
     start_time = time.time()
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_to_key = {
             executor.submit(run_overview): "overview",
             executor.submit(run_judge): "judge",
-            
+
         }
 
         pending = set(future_to_key.keys())
@@ -441,7 +423,7 @@ def run_summary_workflow_from_saved_transcripts(transcript_name: str, call_type:
             })
 
     return {
-        "title": validated_overview.title if validated_overview else "Untitled",
+        "title": "Untitled",  # No longer available from overview
         "call_type": call_type,
         "blocks": blocks,
     }

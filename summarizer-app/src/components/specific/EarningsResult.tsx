@@ -75,9 +75,45 @@ export const EarningsResult: React.FC<EarningsResultProps> = ({
                     </Text>
                   </Text>
                   <Text style={styles.answerText}>
-                    <Text style={styles.answerLabel}>A: </Text>
                     <Text style={styles.answerContent}>
-                      {question.answer_summary}
+                      {Array.isArray((question as any).answers) &&
+                      (question as any).answers.length > 0 ? (
+                        (question as any).answers.map(
+                          (ans: any, idx: number) => (
+                            <View key={idx} style={styles.answerContainer}>
+                              <Text style={styles.answerLabel}>
+                                A (
+                                <Text style={styles.executiveRole}>
+                                  {ans.executive}
+                                </Text>
+                                )
+                              </Text>
+                              {ans.answer_summary.map(
+                                (point: string, i: number) => (
+                                  <Text key={i} style={styles.bulletPoint}>
+                                    • {point}
+                                  </Text>
+                                )
+                              )}
+                            </View>
+                          )
+                        )
+                      ) : (
+                        <View style={styles.answerContainer}>
+                          <Text style={styles.answerLabel}>A: </Text>
+                          {Array.isArray(question.answer_summary) ? (
+                            question.answer_summary.map((point, index) => (
+                              <Text key={index} style={styles.bulletPoint}>
+                                • {point}
+                              </Text>
+                            ))
+                          ) : (
+                            <Text style={styles.answerText}>
+                              {question.answer_summary || "Not provided"}
+                            </Text>
+                          )}
+                        </View>
+                      )}
                     </Text>
                   </Text>
                 </View>
@@ -187,7 +223,16 @@ const styles = StyleSheet.create({
     color: "#000000",
   },
   answerContent: {
-  
     color: "#000000",
+  },
+  bulletPoint: {
+    marginBottom: 10,
+  },
+  answerContainer: {
+    marginBottom: 8,
+  },
+  executiveRole: {
+    fontWeight: "600",
+    color: "#666",
   },
 })

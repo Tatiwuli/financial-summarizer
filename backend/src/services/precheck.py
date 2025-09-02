@@ -16,7 +16,7 @@ class PrecheckError(Exception):
         self.message = message
 
 
-def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
+def run_validate_file(file: UploadFile, call_type: str, summary_length: str, answer_format: str = "prose"):
     processor = create_pdf_processor(save_transcripts_dir=TRANSCRIPTS_DIR)
 
     original_filename = (file.filename or "transcript.pdf")
@@ -69,6 +69,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
         "input": {
             "call_type": call_type,
             "summary_length": summary_length,
+            "answer_format": answer_format,
             "filename": result.get("original_filename"),
         },
         "transcripts": {
@@ -120,7 +121,9 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str):
         "input": {
             "call_type": call_type,
             "summary_length": summary_length,
-            "filename": result.get("original_filename"), #it will be the same with the matched existing file 
+            "answer_format": answer_format,
+            # it will be the same with the matched existing file
+            "filename": result.get("original_filename"),
         },
         "transcript_name": json_name,
     }

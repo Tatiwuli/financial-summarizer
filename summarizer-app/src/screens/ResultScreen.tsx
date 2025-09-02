@@ -199,7 +199,7 @@ export const ResultScreen = () => {
               margin: [0, 6, 0, 2],
             })
             const items: any[] = []
-            a.questions.forEach((q) => {
+            a.questions.forEach((q: any) => {
               items.push({
                 text: [
                   { text: "Q: ", bold: true, color: "#1a365d" },
@@ -209,18 +209,42 @@ export const ResultScreen = () => {
                     color: "#1a365d",
                   },
                 ],
+                margin: [0, 0, 0, 4],
               })
-              items.push({
-                text: [
-                  { text: "A: ", color: "#000000" },
-                  {
-                    text: q.answer_summary || "Not provided",
-                    color: "#000000",
-                  },
-                ],
-              })
+              if (Array.isArray(q.answers) && q.answers.length > 0) {
+                q.answers.forEach((ans: any) => {
+                  items.push({
+                    text: [
+                      { text: "A ", color: "#000000" },
+                      { text: `(${ans.executive})`, color: "#000000" },
+                    ],
+                    margin: [0, 2, 0, 0],
+                  })
+                  ;(ans.answer_summary || []).forEach((p: string) => {
+                    items.push({ text: `• ${p}`, margin: [0, 8, 0, 0] })
+                  })
+                })
+              } else if (Array.isArray(q.answer_summary)) {
+                items.push({
+                  text: [{ text: "A:", color: "#000000" }],
+                  margin: [0, 2, 0, 0],
+                })
+                q.answer_summary.forEach((p: string) =>
+                  items.push({ text: `• ${p}`, margin: [0, 8, 0, 0] })
+                )
+              } else {
+                items.push({
+                  text: [
+                    { text: "A: ", color: "#000000" },
+                    {
+                      text: q.answer_summary || "Not provided",
+                      color: "#000000",
+                    },
+                  ],
+                })
+              }
             })
-            content.push({ ul: items })
+            content.push(...items)
           })
         } else {
           content.push({ text: "Not provided" })
@@ -241,7 +265,7 @@ export const ResultScreen = () => {
                 margin: [0, 4, 0, 2],
               })
               const items: any[] = []
-              analyst.questions.forEach((q) => {
+              analyst.questions.forEach((q: any) => {
                 items.push({
                   text: [
                     { text: "Q: ", bold: true, color: "#1a365d" },
@@ -251,19 +275,42 @@ export const ResultScreen = () => {
                       color: "#1a365d",
                     },
                   ],
+                  margin: [0, 0, 0, 4],
                 })
-                items.push({
-                  text: [
-                    { text: "A: ", bold: true, color: "#000000" },
-                    {
-                      text: q.answer_summary || "Not provided",
-                      
-                      color: "#000000",
-                    },
-                  ],
-                })
+                if (Array.isArray(q.answers) && q.answers.length > 0) {
+                  q.answers.forEach((ans: any) => {
+                    items.push({
+                      text: [
+                        { text: "A ", bold: true, color: "#000000" },
+                        { text: `(${ans.executive})`, color: "#000000" },
+                      ],
+                      margin: [0, 2, 0, 0],
+                    })
+                    ;(ans.answer_summary || []).forEach((p: string) => {
+                      items.push({ text: `• ${p}`, margin: [0, 8, 0, 0] })
+                    })
+                  })
+                } else if (Array.isArray(q.answer_summary)) {
+                  items.push({
+                    text: [{ text: "A:", color: "#000000" }],
+                    margin: [0, 2, 0, 0],
+                  })
+                  q.answer_summary.forEach((p: string) =>
+                    items.push({ text: `• ${p}`, margin: [0, 8, 0, 0] })
+                  )
+                } else {
+                  items.push({
+                    text: [
+                      { text: "A: ", bold: true, color: "#000000" },
+                      {
+                        text: q.answer_summary || "Not provided",
+                        color: "#000000",
+                      },
+                    ],
+                  })
+                }
               })
-              content.push({ ul: items })
+              content.push(...items)
             })
           })
         } else {
@@ -464,18 +511,33 @@ export const ResultScreen = () => {
       const topicText = qaConference.topics
         .map((t) => {
           const pairs = t.question_answers
-            .map(
-              (analyst) =>
-                `**${analyst.name || "Not provided"} - ${analyst.firm || "Not provided"}:**\n` +
-                analyst.questions
-                  .map(
-                    (q) =>
-                      `**Q:** ${q.question || "Not provided"}\n**A:** ${
-                        q.answer_summary || "Not provided"
-                      }`
-                  )
-                  .join("\n\n")
-            )
+            .map((analyst) => {
+              const qs = analyst.questions
+                .map((q: any) => {
+                  const qLine = `**Q:** ${q.question || "Not provided"}`
+                  if (Array.isArray(q.answers) && q.answers.length > 0) {
+                    const blocks = q.answers
+                      .map((ans: any) => {
+                        const bullets = (ans.answer_summary || [])
+                          .map((p: string) => `${p}`)
+                          .join("\n")
+                        return `**A (${ans.executive})**\n${bullets}`
+                      })
+                      .join("\n")
+                    return `${qLine}\n${blocks}`
+                  } else if (Array.isArray(q.answer_summary)) {
+                    const bullets = q.answer_summary
+                      .map((p: string) => `${p}`)
+                      .join("\n")
+                    return `${qLine}\n**A:**\n${bullets}`
+                  }
+                  return `${qLine}\n**A:** ${q.answer_summary || "Not provided"}`
+                })
+                .join("\n\n")
+              return `**${analyst.name || "Not provided"} - ${
+                analyst.firm || "Not provided"
+              }**\n${qs}`
+            })
             .join("\n\n")
           return `### ${t.topic || "Untitled topic"}\n${pairs}`
         })
@@ -490,20 +552,39 @@ export const ResultScreen = () => {
                 `<h3>${t.topic || "Untitled topic"}</h3>` +
                 `<ul>` +
                 t.question_answers
-                  .map(
-                    (analyst) =>
-                      `<li><strong>${analyst.name || "Not provided"} - ${analyst.firm || "Not provided"}:</strong><br/>` +
-                      analyst.questions
-                        .map(
-                          (q) =>
-                            `<strong style="color: #1a365d;">Q:</strong> <span style="color: #1a365d; font-weight: bold;">${
-                              q.question || "Not provided"
-                            }</span><br/><strong style="color: #000000;">A:</strong> <span style="color: #000000; ;">${
-                              q.answer_summary || "Not provided"
-                            }</span>`
-                        )
-                        .join("<br/>")
-                  )
+                  .map((analyst) => {
+                    const qs = analyst.questions
+                      .map((q: any) => {
+                        const qHeader = `<strong style=\"color:#1a365d;\">Q:</strong> <span style=\"color:#1a365d;font-weight:bold;\">${
+                          q.question || "Not provided"
+                        }</span>`
+                        if (Array.isArray(q.answers) && q.answers.length > 0) {
+                          const groups = q.answers
+                            .map(
+                              (ans: any) =>
+                                `<div><strong>A (${ans.executive})</strong><ul>` +
+                                (ans.answer_summary || [])
+                                  .map((p: string) => `<li>${p}</li>`)
+                                  .join("") +
+                                `</ul></div>`
+                            )
+                            .join("")
+                          return `${qHeader}<br/>${groups}`
+                        } else if (Array.isArray(q.answer_summary)) {
+                          const bullets = q.answer_summary
+                            .map((p: string) => `<li>${p}</li>`)
+                            .join("")
+                          return `${qHeader}<br/><strong>A:</strong><ul>${bullets}</ul>`
+                        }
+                        return `${qHeader}<br/><strong>A:</strong> <span>${
+                          q.answer_summary || "Not provided"
+                        }</span>`
+                      })
+                      .join("<br/>")
+                    return `<li><strong>${
+                      analyst.name || "Not provided"
+                    } - ${analyst.firm || "Not provided"}:</strong><br/>${qs}</li>`
+                  })
                   .join("") +
                 `</ul>`
             )

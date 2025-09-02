@@ -6,7 +6,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -30,7 +30,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -54,7 +54,7 @@
       "user_prompt": "This is the transcript.\n<START TRANSCRIPT> {TRANSCRIPT} <END TRANSCRIPT>",
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",

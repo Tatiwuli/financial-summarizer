@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from statistics import mode, StatisticsError
 import fitz  # PyMuPDF
+from config.file_constants import QA_PATTERNS, FILESIZE,TRANSCRIPT_DIR
 
 
 class PDFProcessingError(Exception):
@@ -20,23 +21,12 @@ class PDFProcessingError(Exception):
 class PDFProcessor:
     """Handles PDF processing operations for earnings call transcripts"""
 
-    def __init__(self, max_file_size_mb: int = 10, save_transcripts_dir: str = "transcripts"):
+    def __init__(self, max_file_size_mb: int = FILESIZE, save_transcripts_dir: str = TRANSCRIPT_DIR):
 
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
         self.save_transcripts_dir = Path(save_transcripts_dir)
         self.save_transcripts_dir.mkdir(exist_ok=True)
-        self.qa_patterns = [
-            "Questions and Answers",
-            "Question and Answer",
-            "Questions & Answers",
-            "Question & Answer",
-            "Q&A",
-            "Q & A",
-            "Q and A",
-            "Q&A Session",
-            "Q and A Session",
-            "Analyst Q&A",
-        ]
+        self.qa_patterns = QA_PATTERNS
 
 # ------------------ FUNCTIONS UTILITIES ------------------------------------------------
 
@@ -139,15 +129,7 @@ class PDFProcessor:
 
         try:
           
-            self.qa_patterns = [
-                "Questions and Answers",
-                "Questions And Answers",
-                "Question And Answer",
-                "Question and Answer",
-                "Questions & Answers",
-                "Question & Answer",
-
-            ]
+            self.qa_patterns = QA_PATTERNS
 
             min_title_font_size = body_font_size
 

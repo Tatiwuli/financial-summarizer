@@ -15,10 +15,12 @@ import { useSummaryStore } from "../state/SummaryStore"
 
 type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
+type AnswerFormat = "prose" | "bullet"
 
 export const UploadScreen: React.FC = () => {
   const [callType, setCallType] = useState<CallType>("earnings")
   const [summaryLength, setSummaryLength] = useState<SummaryLength>("long")
+  const [answerFormat, setAnswerFormat] = useState<AnswerFormat>("prose")
   const [selectedFile, setSelectedFile] =
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
@@ -80,7 +82,9 @@ export const UploadScreen: React.FC = () => {
         return
       }
       //Submit file to backend and start summary
-      await summarize(selectedFile, callType, summaryLength)
+      await summarize(selectedFile, callType, summaryLength, {
+        q_a: answerFormat === "bullet" ? "bullet" : "prose",
+      })
       console.log("[UploadScreen] summarize_endpoint() done")
     } catch (e) {
       console.error("[UploadScreen] handleSubmitFile error:", e)
@@ -122,6 +126,20 @@ export const UploadScreen: React.FC = () => {
             onPress={() => setSummaryLength("short")}
             disabled={callType === "conference"}
             style={callType === "conference" ? { opacity: 0.6 } : undefined}
+          />
+        </View>
+
+        <Text style={styles.label}>Select the answer format</Text>
+        <View style={styles.toggleGroup}>
+          <ToggleButton
+            label="Prose Format"
+            isActive={answerFormat === "prose"}
+            onPress={() => setAnswerFormat("prose")}
+          />
+          <ToggleButton
+            label="Bullet Points"
+            isActive={answerFormat === "bullet"}
+            onPress={() => setAnswerFormat("bullet")}
           />
         </View>
 

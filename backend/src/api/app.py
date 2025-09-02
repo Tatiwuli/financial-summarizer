@@ -1,9 +1,5 @@
 from fastapi import FastAPI, status, Request, File, Form, UploadFile
 from fastapi.responses import JSONResponse
-from src.services.precheck import PrecheckError, run_validate_file
-from src.services.job_utils import _get_lock_for_job
-from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow_from_saved_transcripts
-from src.services.job_utils import _get_lock_for_job
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +11,12 @@ import json
 import hashlib
 import threading
 import shutil
+
+
+from src.services.precheck import PrecheckError, run_validate_file
+from src.services.job_utils import _get_lock_for_job
+from src.services.summary_workflow import SummaryWorkflowError, run_summary_workflow_from_saved_transcripts
+from src.services.job_utils import _get_lock_for_job
 from src.config.runtime import (
     TRANSCRIPTS_DIR,
     EARNINGS_LONG_Q_A_PROMPT_VERSION,
@@ -24,9 +26,14 @@ from src.config.runtime import (
     OVERVIEW_PROMPT_VERSION,
     JUDGE_PROMPT_VERSION,
 )
+from src.config.file_constants import RETENTION_DAYS, FORCE_CLEANUP_DAYS, CLEANUP_INTERVAL_SECONDS, TRANSCRIPTS_DIR
 
+
+#Initializing the FastAPI app
 app = FastAPI(title="Summarizer v1")
 
+
+#Defining the origins to allow requests from
 raw_origins = os.getenv("CORS_ORIGINS", "")
 ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
@@ -35,24 +42,21 @@ ALLOWED_ORIGINS_LOCALHOST = [
     "http://localhost:8081", "http://192.168.15.3:8081"]
 
 
+#Initializing the logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 logger.info(f"CORS_ORIGINS raw='{raw_origins}', parsed={ALLOWED_ORIGINS}")
-# Global registry of cancel events per job_id
+
+# Global registry of cancel events per job_id for canceling jobs
 _CANCEL_EVENTS: dict[str, threading.Event] = {}
 
 # Path for dedup index mapping signature -> job_id
 _JOB_INDEX_PATH = os.path.join(TRANSCRIPTS_DIR, "job_index.json")
 
 
-# ------------------- CACHE CLEANUP CONFIG ---------------------
-# Retention and interval can be overridden via environment variables
-RETENTION_DAYS = int(os.getenv("CACHE_RETENTION_DAYS", "2"))
-FORCE_CLEANUP_DAYS = int(os.getenv("FORCE_CLEANUP_DAYS", "7"))
-CLEANUP_INTERVAL_SECONDS = int(
-    os.getenv("CACHE_CLEANUP_INTERVAL_SECONDS", str(6 * 60 * 60)))  # default: 6h
 
 
+# Helper function to parse ISO datetime strings
 def _parse_iso(dt_str: str) -> datetime | None:
     try:
         return datetime.fromisoformat(dt_str)
@@ -60,6 +64,7 @@ def _parse_iso(dt_str: str) -> datetime | None:
         return None
 
 
+# Helper function to determine the last-updated time for a job directory
 def _job_last_updated(job_dir: str) -> datetime:
     """Determine last-updated time for a job directory.
     Prefer status.json's updated_at; fallback to directory mtime.
@@ -80,6 +85,7 @@ def _job_last_updated(job_dir: str) -> datetime:
         return datetime.now()
 
 
+# Helper function to determine if a job is terminal
 def _job_is_terminal(job_dir: str) -> bool:
     status_path = os.path.join(job_dir, "status.json")
     try:
@@ -92,6 +98,7 @@ def _job_is_terminal(job_dir: str) -> bool:
         return True
 
 
+# Helper function to run a cleanup cycle
 def _run_cleanup_cycle():
     """One cleanup cycle: identify, delete, and prune index with locking."""
     logger.info("Cache cleanup cycle started.")
@@ -151,6 +158,7 @@ def _run_cleanup_cycle():
     logger.info("Cache cleanup cycle finished.")
 
 
+# Helper function to start the cleanup thread
 def _start_cleanup_thread():
     def _worker():
         # Initial delay to avoid competing with cold-start workload
@@ -172,6 +180,7 @@ def _start_cleanup_thread():
         logging.exception("Failed to start cache cleanup worker: %s", e)
 
 
+# Helper function to write a JSON file atomically
 def _write_json_atomic(path: str, data: dict) -> None:
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -302,7 +311,9 @@ async def validate_file_endpoint(
     file: UploadFile = File(..., description="The pdf file to validate"),
     call_type: str = Form(...,
                           description="The type of call provided by user"),
-    summary_length: str = Form(..., description="The desired summary length")
+    summary_length: str = Form(..., description="The desired summary length"),
+    answer_format: str = Form(
+        "prose", description="The answer format: prose or bullet")
 ):
     """
     Endpoint that receives a PDF file, validates it and returns the validation result and text sections
@@ -315,7 +326,7 @@ async def validate_file_endpoint(
         )
 
     payload = run_validate_file(
-        file=file, call_type=call_type, summary_length=summary_length)
+        file=file, call_type=call_type, summary_length=summary_length, answer_format=answer_format)
 
     # Check if Q&A transcript exists. If not, mark the file not validated and return
     try:
@@ -363,8 +374,17 @@ async def validate_file_endpoint(
                     ) == "short" else EARNINGS_LONG_Q_A_PROMPT_VERSION
                 )
             prompt_sig = f"{q_a_prompt_ver}|{OVERVIEW_PROMPT_VERSION}|{JUDGE_PROMPT_VERSION}"
+            # Prefer answer_format from validation payload; fallback to saved transcript JSON
+            answer_format = (payload.get("input", {}) or {}
+                             ).get("answer_format", "prose")
+            if not isinstance(answer_format, str) or answer_format not in ("prose", "bullet"):
+                try:
+                    answer_format = (transcript_doc.get("input", {}) or {}).get(
+                        "answer_format", "prose")
+                except Exception:
+                    answer_format = "prose"
             signature = _compute_signature(
-                content_hash, call_type, summary_length, prompt_sig)
+                content_hash, call_type, summary_length, prompt_sig, answer_format)
             print(f"prompt_sig: {prompt_sig}")
             index = _read_job_index(_JOB_INDEX_PATH)
             existing_job_id = index.get(signature)
@@ -421,7 +441,7 @@ async def validate_file_endpoint(
     _CANCEL_EVENTS[job_id] = cancel_evt
 
     # Trigger the summary workflow asynchronously using saved transcripts JSON
-    def _run_workflow_background(transcript_json_name: str, call_type_bg: str, summary_length_bg: str, job_dir_bg: str, cancel_event_bg: threading.Event):
+    def _run_workflow_background(transcript_json_name: str, call_type_bg: str, summary_length_bg: str, job_dir_bg: str, cancel_event_bg: threading.Event, answer_format_bg: str = "prose"):
         try:
             run_summary_workflow_from_saved_transcripts(
                 transcript_name=transcript_json_name,
@@ -429,15 +449,33 @@ async def validate_file_endpoint(
                 summary_length=summary_length_bg,
                 job_dir=job_dir_bg,
                 cancel_event=cancel_event_bg,
+                answer_format=answer_format_bg,
             )
         except Exception as e:
             logging.exception("Background summary workflow failed: %s", e)
+
+    # Extract answer_format preferring payload; fallback to saved transcript JSON
+    answer_format = (payload.get("input", {}) or {}
+                     ).get("answer_format", "prose")
+    if not isinstance(answer_format, str) or answer_format not in ("prose", "bullet"):
+        try:
+            transcript_json_path = os.path.join(
+                TRANSCRIPTS_DIR, transcript_name)
+            with open(transcript_json_path, "r", encoding="utf-8") as f:
+                saved_doc = json.load(f)
+            answer_format = (saved_doc.get("input", {}) or {}
+                             ).get("answer_format", "prose")
+        except Exception as e:
+            logging.warning(
+                "Failed to extract answer_format from transcript, using default: %s", e)
+            answer_format = "prose"
+    logging.info("[validate_file endpoint] answer format: %s", answer_format)
 
     try:
         threading.Thread(
             target=_run_workflow_background,
             args=(transcript_name, call_type,
-                  summary_length, job_dir, cancel_evt),
+                  summary_length, job_dir, cancel_evt, answer_format),
             daemon=True,
         ).start()
     except Exception as e:
@@ -464,8 +502,17 @@ async def validate_file_endpoint(
                     ) == "short" else EARNINGS_LONG_Q_A_PROMPT_VERSION
                 )
             prompt_sig_idx = f"{q_a_prompt_ver_idx}|{OVERVIEW_PROMPT_VERSION}|{JUDGE_PROMPT_VERSION}"
+            # Prefer answer_format from validation payload; fallback to saved transcript JSON
+            answer_format_idx = (payload.get("input", {}) or {}).get(
+                "answer_format", "prose")
+            if not isinstance(answer_format_idx, str) or answer_format_idx not in ("prose", "bullet"):
+                try:
+                    answer_format_idx = (transcript_doc_for_index.get(
+                        "input", {}) or {}).get("answer_format", "prose")
+                except Exception:
+                    answer_format_idx = "prose"
             sig = _compute_signature(
-                ch, call_type, summary_length, prompt_sig_idx)
+                ch, call_type, summary_length, prompt_sig_idx, answer_format_idx)
             idx = _read_job_index(_JOB_INDEX_PATH)
             idx[sig] = job_id
             _write_job_index(_JOB_INDEX_PATH, idx)
@@ -611,10 +658,10 @@ async def cancel_job(job_id: str):
 
 
 # ------------------- DEDUP HELPERS ---------------------
-def _compute_signature(content_hash: str, call_type: str, summary_length: str, prompt_sig: str) -> str:
-    """Compute a dedup signature using transcript hash, user parameters, and prompt versions."""
+def _compute_signature(content_hash: str, call_type: str, summary_length: str, prompt_sig: str, answer_format: str = "prose") -> str:
+    """Compute a dedup signature using transcript hash, user parameters, prompt versions, and answer format."""
     try:
-        raw = f"{content_hash}|{call_type}|{summary_length}|{prompt_sig}".encode(
+        raw = f"{content_hash}|{call_type}|{summary_length}|{prompt_sig}|{answer_format}".encode(
             "utf-8", errors="ignore"
         )
     except Exception:
