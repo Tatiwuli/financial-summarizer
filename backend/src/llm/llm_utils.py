@@ -11,12 +11,12 @@ from src.config.runtime import (
     EFFORT_LEVEL_Q_A,
     EFFORT_LEVEL_JUDGE,
     EFFORT_LEVEL_Q_A_CONFERENCE,
-    EARNINGS_SHORT_Q_A_PROMPT_VERSION,
-    EARNINGS_LONG_Q_A_PROMPT_VERSION,
-    EARNINGS_SHORT_Q_A_BULLET_PROMPT_VERSION,
-    EARNINGS_LONG_Q_A_BULLET_PROMPT_VERSION,
-    CONFERENCE_LONG_Q_A_PROMPT_VERSION,
-    CONFERENCE_LONG_Q_A_BULLET_PROMPT_VERSION,
+    EARNINGS_SHORT_QA_PROMPT_VERSION,
+    EARNINGS_LONG_QA_PROMPT_VERSION,
+    EARNINGS_SHORT_QA_BULLET_PROMPT_VERSION,
+    EARNINGS_LONG_QA_BULLET_PROMPT_VERSION,
+    CONFERENCE_LONG_QA_PROMPT_VERSION,
+    CONFERENCE_LONG_BULLET_PROMPT_VERSION,
     Q_A_MODEL,
     CONFERENCE_Q_A_MODEL
 )
@@ -146,36 +146,50 @@ class OverviewOutputFormat(BaseModel):
         metric_description: str
 
     guidance_outlook: Optional[List[GuidanceItem]] = None
-   
+
 
 def load_prompts_summarize():
 
-    config_dir = os.path.join(os.path.dirname(
-        os.path.dirname(__file__)), 'config', 'prompts_summarize')
+    base_config_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), 'config'
+    )
+    prompts_root = os.path.join(base_config_dir, 'prompts_summarize')
+    earnings_dir = os.path.join(prompts_root, 'prompts_earnings')
+    conference_dir = os.path.join(prompts_root, 'prompts_conference')
 
-    with open(os.path.join(config_dir, 'short_q_a.json'), 'r', encoding='utf-8') as f:
-        short_q_a_prompt = json.load(f)
+    # Earnings prompts
+    with open(os.path.join(earnings_dir, 'short_earning.json'), 'r', encoding='utf-8') as f:
+        short_earning_prompt = json.load(f)
 
-    with open(os.path.join(config_dir, 'long_q_a.json'), 'r', encoding='utf-8') as f:
-        long_q_a_prompt = json.load(f)
+    with open(os.path.join(earnings_dir, 'long_earning.json'), 'r', encoding='utf-8') as f:
+        long_earning_prompt = json.load(f)
 
-    with open(os.path.join(config_dir, 'long_conference.json'), 'r', encoding='utf-8') as f:
+    with open(os.path.join(earnings_dir, 'short_earning_bullet.json'), 'r', encoding='utf-8') as f:
+        short_earning_bullet_prompt = json.load(f)
+
+    with open(os.path.join(earnings_dir, 'long_earning_bullet.json'), 'r', encoding='utf-8') as f:
+        long_earning_bullet_prompt = json.load(f)
+
+    # Conference prompts
+    with open(os.path.join(conference_dir, 'long_conference.json'), 'r', encoding='utf-8') as f:
         conference_q_a_prompt = json.load(f)
 
-    with open(os.path.join(config_dir, 'overview.json'), 'r', encoding='utf-8') as f:
-        overview_prompt = json.load(f)
-
-    # Load bullet point prompts
-    with open(os.path.join(config_dir, 'short_q_a_bullet.json'), 'r', encoding='utf-8') as f:
-        short_q_a_bullet_prompt = json.load(f)
-
-    with open(os.path.join(config_dir, 'long_q_a_bullet.json'), 'r', encoding='utf-8') as f:
-        long_q_a_bullet_prompt = json.load(f)
-
-    with open(os.path.join(config_dir, 'long_conference_bullet.json'), 'r', encoding='utf-8') as f:
+    with open(os.path.join(conference_dir, 'long_conference_bullet.json'), 'r', encoding='utf-8') as f:
         conference_q_a_bullet_prompt = json.load(f)
 
-    return short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt, short_q_a_bullet_prompt, long_q_a_bullet_prompt, conference_q_a_bullet_prompt
+    # Overview prompt lives directly under config/
+    with open(os.path.join(base_config_dir, 'overview.json'), 'r', encoding='utf-8') as f:
+        overview_prompt = json.load(f)
+
+    return (
+        short_earning_prompt,
+        long_earning_prompt,
+        overview_prompt,
+        conference_q_a_prompt,
+        short_earning_bullet_prompt,
+        long_earning_bullet_prompt,
+        conference_q_a_bullet_prompt,
+    )
 
 
 def load_prompts_judge():
@@ -188,7 +202,7 @@ def load_prompts_judge():
     return q_a_summary_prompt
 
 
-short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt, short_q_a_bullet_prompt, long_q_a_bullet_prompt, conference_q_a_bullet_prompt = load_prompts_summarize()
+short_earning_prompt, long_earning_prompt, overview_prompt, conference_q_a_prompt, short_earning_bullet_prompt, long_earning_bullet_prompt, conference_q_a_bullet_prompt = load_prompts_summarize()
 q_a_summary_prompt = load_prompts_judge()
 
 logger = logging.getLogger("llm_utils")
@@ -237,23 +251,23 @@ def get_prompt_config(call_type: str, summary_length: str, answer_format: str = 
     if call_type.lower() == "conference":
         # Conference calls only have long format
         if answer_format == "bullet":
-            prompt_version = CONFERENCE_LONG_Q_A_BULLET_PROMPT_VERSION
+            prompt_version = CONFERENCE_LONG_BULLET_PROMPT_VERSION
         else:
-            prompt_version = CONFERENCE_LONG_Q_A_PROMPT_VERSION
+            prompt_version = CONFERENCE_LONG_QA_PROMPT_VERSION
         model = CONFERENCE_Q_A_MODEL
         effort_level = EFFORT_LEVEL_Q_A_CONFERENCE
     else:
         # Earnings calls
         if summary_length == "short":
             if answer_format == "bullet":
-                prompt_version = EARNINGS_SHORT_Q_A_BULLET_PROMPT_VERSION
+                prompt_version = EARNINGS_SHORT_QA_BULLET_PROMPT_VERSION
             else:
-                prompt_version = EARNINGS_SHORT_Q_A_PROMPT_VERSION
+                prompt_version = EARNINGS_SHORT_QA_PROMPT_VERSION
         else:
             if answer_format == "bullet":
-                prompt_version = EARNINGS_LONG_Q_A_BULLET_PROMPT_VERSION
+                prompt_version = EARNINGS_LONG_QA_BULLET_PROMPT_VERSION
             else:
-                prompt_version = EARNINGS_LONG_Q_A_PROMPT_VERSION
+                prompt_version = EARNINGS_LONG_QA_PROMPT_VERSION
         model = Q_A_MODEL
         effort_level = EFFORT_LEVEL_Q_A
 
@@ -307,14 +321,14 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
 
     else:  # for earnig calls
         effort_level = EFFORT_LEVEL_Q_A
-        # Earnings calls use short_q_a.json or long_q_a.json based on summary_length
+        # Earnings calls use short_earning.json or long_earning.json based on summary_length
         if summary_length == "short":
             if answer_format == "bullet":
-                short_section = _ensure_dict(short_q_a_bullet_prompt.get(
-                    "Q_A_SHORT_SUMMARY"), "short_q_a_bullet.json -> Q_A_SHORT_SUMMARY")
+                short_section = _ensure_dict(short_earning_bullet_prompt.get(
+                    "Q_A_SHORT_SUMMARY"), "short_earning_bullet.json -> Q_A_SHORT_SUMMARY")
             else:
-                short_section = _ensure_dict(short_q_a_prompt.get(
-                    "Q_A_SHORT_SUMMARY"), "short_q_a.json -> Q_A_SHORT_SUMMARY")
+                short_section = _ensure_dict(short_earning_prompt.get(
+                    "Q_A_SHORT_SUMMARY"), "short_earning.json -> Q_A_SHORT_SUMMARY")
             prompts = _ensure_dict(short_section.get(
                 prompt_version), f"short Q&A prompts['{prompt_version}']")
 
@@ -330,11 +344,11 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
 
         elif summary_length == "long":
             if answer_format == "bullet":
-                long_section = _ensure_dict(long_q_a_bullet_prompt.get(
-                    "Q_A_SUMMARY"), "long_q_a_bullet.json -> Q_A_SUMMARY")
+                long_section = _ensure_dict(long_earning_bullet_prompt.get(
+                    "Q_A_SUMMARY"), "long_earning_bullet.json -> Q_A_SUMMARY")
             else:
-                long_section = _ensure_dict(long_q_a_prompt.get(
-                    "Q_A_SUMMARY"), "long_q_a.json -> Q_A_SUMMARY")
+                long_section = _ensure_dict(long_earning_prompt.get(
+                    "Q_A_SUMMARY"), "long_earning.json -> Q_A_SUMMARY")
 
             prompts = _ensure_dict(long_section.get(
                 prompt_version), f"long Q&A prompts['{prompt_version}']")

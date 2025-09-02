@@ -32,7 +32,7 @@ export interface SummaryState {
     callType: string,
     summaryLength: string,
     promptVersions?: {
-      q_a?: string
+      q_a?: "prose" | "bullet"
       overview?: string
       judge?: string
     }

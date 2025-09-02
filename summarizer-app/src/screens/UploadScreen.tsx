@@ -9,28 +9,29 @@ import {
 } from "react-native"
 import * as DocumentPicker from "expo-document-picker"
 
-import { ToggleButton } from "../components/common/ToggleButton"
 
+import { ToggleButton } from "../components/common/ToggleButton"
 import { useSummaryStore } from "../state/SummaryStore"
 
 type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
 type AnswerFormat = "prose" | "bullet"
 
+
 export const UploadScreen: React.FC = () => {
+  //User Inputs
   const [callType, setCallType] = useState<CallType>("earnings")
   const [summaryLength, setSummaryLength] = useState<SummaryLength>("long")
   const [answerFormat, setAnswerFormat] = useState<AnswerFormat>("prose")
   const [selectedFile, setSelectedFile] =
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
-  // Zustand
+// Initialize State 
   const {
     summarize,
     status,
     error,
     result,
-
     stage,
     percentComplete,
   } = useSummaryStore()
@@ -38,6 +39,7 @@ export const UploadScreen: React.FC = () => {
   console.log("[UploadScreen] useSummaryStore mounted")
   console.log("[UploadScreen] using store", useSummaryStore.getState().status)
 
+  //Get File from DocumentPicker
   const handleSelectFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -48,6 +50,7 @@ export const UploadScreen: React.FC = () => {
 
       console.log("[DocPicker] result:", result)
 
+      // When user clicks cancel on the file manager app
       if (result.canceled) return
 
       const file = result.assets?.[0]
@@ -56,6 +59,7 @@ export const UploadScreen: React.FC = () => {
         return
       }
 
+      // Check if file is larger than 10MB
       const maxSizeBytes = 10 * 1024 * 1024 // 10MB
       if (typeof file.size === "number" && file.size > maxSizeBytes) {
         Alert.alert(
@@ -66,6 +70,7 @@ export const UploadScreen: React.FC = () => {
       }
 
       console.log("[DocPicker] asset:", file)
+      // Update the  uploaded file to the state
       setSelectedFile(file)
     } catch (e) {
       console.error("Error selecting file:", e)
@@ -74,17 +79,14 @@ export const UploadScreen: React.FC = () => {
   }
 
   //Submit file to backend
-
   const handleSubmitFile = async () => {
     try {
       if (!selectedFile) {
-        Alert.alert("Selecione um arquivo", "Você precisa escolher um PDF.")
+        Alert.alert("Select a PDF", "You need to select a PDF.")
         return
       }
-      //Submit file to backend and start summary
-      await summarize(selectedFile, callType, summaryLength, {
-        q_a: answerFormat === "bullet" ? "bullet" : "prose",
-      })
+      //Submit file to backend and trigger the workflow 
+      await summarize(selectedFile, callType, summaryLength, { q_a: answerFormat } )
       console.log("[UploadScreen] summarize_endpoint() done")
     } catch (e) {
       console.error("[UploadScreen] handleSubmitFile error:", e)
@@ -97,6 +99,7 @@ export const UploadScreen: React.FC = () => {
       <View style={styles.container}>
         <Text style={styles.title}>New Summary</Text>
 
+      {/* Display Call Type Buttons and save to state*/}
         <Text style={styles.label}>Select the call type</Text>
         <View style={styles.toggleGroup}>
           <ToggleButton
@@ -113,6 +116,7 @@ export const UploadScreen: React.FC = () => {
           }
         </View>
 
+        {/* Display Summary Length Buttons and save to state*/}
         <Text style={styles.label}>Select the summary length</Text>
         <View style={styles.toggleGroup}>
           <ToggleButton
@@ -129,6 +133,7 @@ export const UploadScreen: React.FC = () => {
           />
         </View>
 
+        {/* Display Answer Format Buttons and save to state*/}
         <Text style={styles.label}>Select the answer format</Text>
         <View style={styles.toggleGroup}>
           <ToggleButton
@@ -143,6 +148,7 @@ export const UploadScreen: React.FC = () => {
           />
         </View>
 
+        {/* Display the uploaded file */}
         <TouchableOpacity style={styles.uploadBox} onPress={handleSelectFile}>
           {selectedFile ? (
             <Text style={styles.uploadBoxText}>{selectedFile.name}</Text>
@@ -156,6 +162,7 @@ export const UploadScreen: React.FC = () => {
           )}
         </TouchableOpacity>
 
+        {/* Display the submit button */}
         <TouchableOpacity
           style={styles.submitButton}
           onPress={handleSubmitFile}
@@ -163,22 +170,26 @@ export const UploadScreen: React.FC = () => {
           <Text style={styles.submitButtonText}>Generate Summary</Text>
         </TouchableOpacity>
 
-        {/* ✅ Renderize o resultado/erro AQUI, não dentro do handleSubmitFile */}
+        
+        {/* Display the result */}
         {status === "success" && result && (
           <Text selectable style={{ marginTop: 12 }}>
             {JSON.stringify(result, null, 2)}
           </Text>
         )}
 
+        {/* Display the validating message */}
         {status === "validating" && (
-          <Text style={{ marginTop: 12 }}>Validating file</Text>
+          <Text style={{ marginTop: 12, fontSize: 16}}>Validating file</Text>
         )}
 
+        {/* Display the validated message */}
         {status === "validated" && (
-          <Text style={{ marginTop: 12 }}>PDF Validated.</Text>
+          <Text style={{ marginTop: 12 , fontSize: 16}}>PDF Validated.</Text>
         )}
 
         {/* Loading/progress view while workflow runs (before navigating to results) */}
+        {/* Display the progress bar */}
         {status === "loading" && (
           <View style={styles.progressCard}>
             <Text style={styles.progressTitle}>Processing</Text>
@@ -199,6 +210,7 @@ export const UploadScreen: React.FC = () => {
           </View>
         )}
 
+        {/* Display the error message */}
         {error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     </SafeAreaView>
@@ -273,6 +285,15 @@ const styles = StyleSheet.create({
 
 function formatStage(s?: string | null): string {
   if (!s) return "Starting..."
+  const key = String(s).toLowerCase()
+  const map: Record<string, string> = {
+    q_a_summary: "Q&A summary",
+    overview_summary: "Overview summary",
+    summary_evaluation: "Evaluation",
+    validating: "Validating",
+    cancelled: "Cancelled",
+  }
+  if (map[key]) return map[key]
   const pretty = s.replace(/_/g, " ")
   return pretty.charAt(0).toUpperCase() + pretty.slice(1)
 }

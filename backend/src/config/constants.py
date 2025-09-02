@@ -1,3 +1,5 @@
+
+
 QA_PATTERNS = [
     "Questions and Answers",
     "Questions And Answers",
@@ -7,7 +9,8 @@ QA_PATTERNS = [
     "Question & Answer",
 ]
 FILESIZE = 10
-TRANSCRIPT_DIR = "transcripts"
+
+CACHE_DIR = "local_cache"
 
 RETENTION_DAYS = 2
 FORCE_CLEANUP_DAYS = 7

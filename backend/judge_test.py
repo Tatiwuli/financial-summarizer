@@ -100,27 +100,27 @@
 #     result = processor.process_pdf(file_path)
 
 #     # DEBUG: Log all keys in the result
-#     print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
-#     print(f"[DEBUG PRECHECK] Full result: {result}")
+#     print(f"[PRECHECK] Result keys: {list(result.keys())}")
+#     print(f"[PRECHECK] Full result: {result}")
 
 #     # DEBUG: Log the extracted content lengths and snippets
 #     pres_transcript = result.get("presentation_transcript", "")
 #     # Fixed: use correct key with underscore
 #     qa_transcript = result.get("q_a_transcript", "")
 
-#     print(f"[DEBUG PRECHECK] Presentation length: {len(pres_transcript)}")
-#     print(f"[DEBUG PRECHECK] Q&A length: {len(qa_transcript)}")
-#     print(f"[DEBUG PRECHECK] Q&A transcript exists: {bool(qa_transcript)}")
+#     print(f"[PRECHECK] Presentation length: {len(pres_transcript)}")
+#     print(f"[PRECHECK] Q&A length: {len(qa_transcript)}")
+#     print(f"[PRECHECK] Q&A transcript exists: {bool(qa_transcript)}")
 
 #     if pres_transcript:
 #         print(
-#             f"[DEBUG PRECHECK] Presentation preview (first 200 chars): {pres_transcript[:200]}...")
+#             f"[PRECHECK] Presentation preview (first 200 chars): {pres_transcript[:200]}...")
 
 #     if qa_transcript:
 #         print(
-#             f"[DEBUG PRECHECK] Q&A preview (first 200 chars): {qa_transcript[:200]}...")
+#             f"[PRECHECK] Q&A preview (first 200 chars): {qa_transcript[:200]}...")
 #     else:
-#         print("[DEBUG PRECHECK] Q&A transcript is empty or None!")
+#         print("[PRECHECK] Q&A transcript is empty or None!")
 
 #     pres_len = result.get("presentation_text_length")
 #     qa_len = result.get("qa_text_length")

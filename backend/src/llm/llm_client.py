@@ -50,51 +50,6 @@ class BaseLLMClient(ABC):
         """Generates a response from the LLM."""
         pass
 
-# --- 3. Implementações Específicas para Cada Provedor ---
-
-
-class GeminiClient(BaseLLMClient):
-    """LLM Client for Google's Gemini models."""
-
-    def __init__(self, model: str):
-        super().__init__(model)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY not found in environment variables.")
-
-        genai.configure(api_key=api_key)
-        self.client = genai.GenerativeModel(model_name=self.model)
-
-    def generate(self, system_prompt, user_prompt, max_output_tokens, **kwargs) -> LLMResponse:
-
-        try:
-            response = self.client.generate_content(
-                contents=[user_prompt],
-                generation_config=genai.GenerationConfig(
-                    temperature=0.0,  # Gemini has, GPT not
-                    max_output_tokens=max_output_tokens,
-                ),
-                system_instruction=system_prompt
-            )
-
-            output_text = response.text
-            finish_reason = response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN"
-
-            if not output_text:  # Tratamento de resposta vazia
-                raise LLMClientError(
-                    f"Empty response from Gemini. Finish Reason: {finish_reason}")
-
-            return LLMResponse(
-                text=output_text,
-                model=self.model,
-                input_tokens=response.usage_metadata.prompt_token_count,
-                output_tokens=response.usage_metadata.candidates_token_count,
-                finish_reason=finish_reason,
-            )
-        except Exception as e:
-            raise LLMClientError(f"Gemini API error: {e}")
-
 
 class OpenAIClient(BaseLLMClient):
     """LLM Client for OpenAI's GPT models."""
@@ -116,13 +71,16 @@ class OpenAIClient(BaseLLMClient):
             "max_output_tokens": max_output_tokens,
 
         }
+
+        #Only gpt-5 support effort level for reasoning
         if effort_level and self.model == "gpt-5":
             base["reasoning"] = {"effort": effort_level}
 
         try:
+            #Track output generation time
             start_time = time.time()
 
-            # Use raw responses to access headers (rate limit info)
+            # Use raw responses to access headers for rate limit info
             if text_format is not None:
                 raw_api_resp = self.client.responses.with_raw_response.parse(
                     **base,
@@ -135,8 +93,7 @@ class OpenAIClient(BaseLLMClient):
                 #get status before possible json parsing error 
                 status = getattr(response, "status", None) or "unknown"
 
-                if status != 'stop':
-                    print(f"OpenAI API error: {response}")
+                print("OPEN AI Status: ", status)
 
                 parsed_resp = getattr(response, "output_parsed", None)
                 text_output = parsed_resp.json() if parsed_resp is not None else ""
@@ -146,12 +103,12 @@ class OpenAIClient(BaseLLMClient):
                 response = raw_api_resp.parse()
                 text_output = getattr(response, "output_text", None)
 
-         
-
+          #  Fallback to manual text extraction
+          
             if text_output is None:
                 print(
                     "output_text attribute is not provided by the SDK. Aggregating the output text manually")
-                # fallback
+              #Concatenate the output text
                 text_output = ""
                 for item in getattr(response, "output", []) or []:
                     for part in getattr(item, "content", []) or []:
@@ -165,17 +122,16 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             raise LLMClientError(f"OpenAI API error: {e}")
 
-        # Usage (may be missing depending on model/tooling)
+        # Usage information
         usage = getattr(response, "usage", None)
         in_tok = getattr(usage, "input_tokens", None) if usage else None
         out_tok = getattr(usage, "output_tokens", None) if usage else None
         reasoning_tok = getattr(
             usage, "reasoning_tokens", None) if usage else None
 
-        # Duration
-        try:
-            duration_seconds = max(0.0, time.time() - start_time)
-        except Exception:
+        # Calculate Duration
+        duration_seconds = max(0.0, time.time() - start_time)
+        if not duration_seconds:
             duration_seconds = None
 
         # Extract rate-limit remaining tokens from headers (if present)
@@ -208,12 +164,8 @@ class OpenAIClient(BaseLLMClient):
 
 
 def get_llm_client(model: str) -> BaseLLMClient:
-    """
-    Factory function to get the appropriate LLM client based on the model name.
-    """
-    if model.startswith("gemini"):
-        return GeminiClient(model=model)
-    elif model.startswith("gpt"):
+   
+    if model.startswith("gpt"):
         return OpenAIClient(model=model)
     else:
         raise ValueError(f"Unsupported model provider for model: {model}")

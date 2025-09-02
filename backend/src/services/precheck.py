@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from fastapi import UploadFile
 from src.utils.pdf_processor import PDFProcessingError, create_pdf_processor
-from src.config.runtime import TRANSCRIPTS_DIR
+from src.config.constants import CACHE_DIR
 import json
 import hashlib
 
@@ -17,7 +17,7 @@ class PrecheckError(Exception):
 
 
 def run_validate_file(file: UploadFile, call_type: str, summary_length: str, answer_format: str = "prose"):
-    processor = create_pdf_processor(save_transcripts_dir=TRANSCRIPTS_DIR)
+    processor = create_pdf_processor(save_transcripts_dir=CACHE_DIR)
 
     original_filename = (file.filename or "transcript.pdf")
 
@@ -29,38 +29,31 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
             pdf_bytes, original_filename=original_filename
         )
 
-        # DEBUG: Log all keys in the result
-        # print(f"[DEBUG PRECHECK] Result keys: {list(result.keys())}")
-        # print(f"[DEBUG PRECHECK] Full result: {result}")
-
         # DEBUG: Log the extracted content lengths and snippets
         pres_transcript = result.get("presentation_transcript", "")
         # Fixed: use correct key with underscore
         qa_transcript = result.get("q_a_transcript", "")
 
-        print(f"[DEBUG PRECHECK] Presentation length: {len(pres_transcript)}")
-        print(f"[DEBUG PRECHECK] Q&A length: {len(qa_transcript)}")
-        print(f"[DEBUG PRECHECK] Q&A transcript exists: {bool(qa_transcript)}")
+        print(f"[PRECHECK] Presentation length: {len(pres_transcript)}")
+        print(f"[PRECHECK] Q&A length: {len(qa_transcript)}")
+        print(f"[PRECHECK] Q&A transcript exists: {bool(qa_transcript)}")
 
         if pres_transcript:
             print(
-                f"[DEBUG PRECHECK] Presentation preview (first 200 chars): {pres_transcript[:200]}...")
+                f"[PRECHECK] Presentation preview (first 200 chars): {pres_transcript[:200]}...")
 
         if qa_transcript:
             print(
-                f"[DEBUG PRECHECK] Q&A preview (first 200 chars): {qa_transcript[:200]}...")
+                f"[PRECHECK] Q&A preview (first 200 chars): {qa_transcript[:200]}...")
         else:
-            print("[DEBUG PRECHECK] Q&A transcript is empty or None!")
+            print("[PRECHECK] Q&A transcript is empty or None!")
 
     except PDFProcessingError as e:
-        print(f"[DEBUG PRECHECK] PDF Processing error: {e}")
+        print(f"[PRECHECK] PDF Processing error: {e}")
         raise PrecheckError("pdf_processing_error", str(e))
 
     finally:
         pass
-
-    pres_len = result.get("presentation_text_length")
-    qa_len = result.get("qa_text_length")
 
     # Build payload to persist server-side
     save_transcript_data = {
@@ -89,7 +82,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
     base_name = os.path.basename(result.get(
         "original_filename") or "transcript.pdf")
     json_name = os.path.splitext(base_name)[0] + ".json"
-    json_path = os.path.join(TRANSCRIPTS_DIR, json_name)
+    json_path = os.path.join(CACHE_DIR, json_name)
 
     save_transcript_data["content_hash"] = content_hash
     save_transcript_data["transcript_name"] = json_name
@@ -110,7 +103,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
             reuse_existing = False
 
     if not reuse_existing:  # save it
-        os.makedirs(TRANSCRIPTS_DIR, exist_ok=True)
+        os.makedirs(CACHE_DIR, exist_ok=True)
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(save_transcript_data, f, ensure_ascii=False)
 
