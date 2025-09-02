@@ -103,6 +103,15 @@ const styles = StyleSheet.create({
 
 function formatStage(s?: string | null): string {
   if (!s) return "Starting..."
+  const key = String(s).toLowerCase()
+  const map: Record<string, string> = {
+    q_a_summary: "Q&A summary",
+    overview_summary: "Overview summary",
+    summary_evaluation: "Evaluation",
+    validating: "Validating",
+    cancelled: "Cancelled",
+  }
+  if (map[key]) return map[key]
   const pretty = s.replace(/_/g, " ")
   return pretty.charAt(0).toUpperCase() + pretty.slice(1)
 }
