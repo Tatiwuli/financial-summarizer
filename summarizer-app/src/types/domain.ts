@@ -1,9 +1,17 @@
 // Domain/Business Logic Types
 
 // Defines the structure for a single Q&A item
+export interface AnswerByExecutiveBullet {
+  executive: string
+  answer_summary: string[]
+}
+
 export interface Question {
   question: string
-  answer_summary: string
+  // legacy prose or flat bullets
+  answer_summary?: string | string[]
+  // new grouped bullets by executive
+  answers?: AnswerByExecutiveBullet[]
 }
 
 // Defines the structure for an analyst and their questions
@@ -31,7 +39,6 @@ export interface QABlockByTopic {
 
 // Defines the shape of the data inside an 'overview' block
 export interface OverviewBlockData {
-  title: string
   executives_list: Array<{ executive_name: string; role: string }>
   overview: string
   guidance_outlook?: Array<{
@@ -39,11 +46,7 @@ export interface OverviewBlockData {
     metric_name: string
     metric_description: string
   }>
-  financial_results?: Array<{
-    period_label: string
-    metric_name: string
-    metric_description: string
-  }>
+ 
 }
 
 // Defines the shape of the data inside a 'judge' block

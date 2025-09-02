@@ -5,7 +5,21 @@ import logging
 import os
 from src.llm.llm_client import get_llm_client
 from typing import Tuple
-from src.config.runtime import JUDGE_PROMPT_VERSION, OVERVIEW_PROMPT_VERSION, EFFORT_LEVEL_Q_A, EFFORT_LEVEL_JUDGE, EFFORT_LEVEL_Q_A_CONFERENCE
+from src.config.runtime import (
+    JUDGE_PROMPT_VERSION,
+    OVERVIEW_PROMPT_VERSION,
+    EFFORT_LEVEL_Q_A,
+    EFFORT_LEVEL_JUDGE,
+    EFFORT_LEVEL_Q_A_CONFERENCE,
+    EARNINGS_SHORT_Q_A_PROMPT_VERSION,
+    EARNINGS_LONG_Q_A_PROMPT_VERSION,
+    EARNINGS_SHORT_Q_A_BULLET_PROMPT_VERSION,
+    EARNINGS_LONG_Q_A_BULLET_PROMPT_VERSION,
+    CONFERENCE_LONG_Q_A_PROMPT_VERSION,
+    CONFERENCE_LONG_Q_A_BULLET_PROMPT_VERSION,
+    Q_A_MODEL,
+    CONFERENCE_Q_A_MODEL
+)
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -38,6 +52,31 @@ class SummarizeOutputFormat(BaseModel):
     analysts: List[AnalystQA]
 
 
+# BULLET POINT OUTPUT FORMAT
+class AnswerByExecutiveBullet(BaseModel):
+    executive: str
+    answer_summary: List[str]
+
+
+class QuestionBullet(BaseModel):
+    question: str
+    # New grouped answers by executive; fallback support handled at render level
+    answers: Optional[List[AnswerByExecutiveBullet]] = None
+    # Backward-compat: allow plain list of bullet strings
+    answer_summary: Optional[List[str]] = None
+
+
+class AnalystQABullet(BaseModel):
+    name: str
+    firm: str
+    questions: List[QuestionBullet]
+
+
+class SummarizeOutputFormatBullet(BaseModel):
+    title: str
+    analysts: List[AnalystQABullet]
+
+
 # CONFERENCE CALL OUTPUT FORMAT
 class Topic(BaseModel):
     topic: str
@@ -47,6 +86,18 @@ class Topic(BaseModel):
 class ConferenceSummarizeOutputFormat(BaseModel):
     title: str
     topics: List[Topic]
+
+
+# CONFERENCE CALL BULLET POINT OUTPUT FORMAT
+class TopicBullet(BaseModel):
+    topic: str
+    # Reuse the same AnalystQABullet structure
+    question_answers: List[AnalystQABullet]
+
+
+class ConferenceSummarizeOutputFormatBullet(BaseModel):
+    title: str
+    topics: List[TopicBullet]
 
 
 # JUDGE OUTPUT FORMAT - Complete schemas for q_a_summary.json output structure
@@ -86,7 +137,6 @@ class Executive(BaseModel):
 
 
 class OverviewOutputFormat(BaseModel):
-    title: str
     executives_list: List[Executive]
     overview: str
 
@@ -96,8 +146,7 @@ class OverviewOutputFormat(BaseModel):
         metric_description: str
 
     guidance_outlook: Optional[List[GuidanceItem]] = None
-    financial_results: Optional[List[GuidanceItem]] = None
-
+   
 
 def load_prompts_summarize():
 
@@ -116,7 +165,17 @@ def load_prompts_summarize():
     with open(os.path.join(config_dir, 'overview.json'), 'r', encoding='utf-8') as f:
         overview_prompt = json.load(f)
 
-    return short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt
+    # Load bullet point prompts
+    with open(os.path.join(config_dir, 'short_q_a_bullet.json'), 'r', encoding='utf-8') as f:
+        short_q_a_bullet_prompt = json.load(f)
+
+    with open(os.path.join(config_dir, 'long_q_a_bullet.json'), 'r', encoding='utf-8') as f:
+        long_q_a_bullet_prompt = json.load(f)
+
+    with open(os.path.join(config_dir, 'long_conference_bullet.json'), 'r', encoding='utf-8') as f:
+        conference_q_a_bullet_prompt = json.load(f)
+
+    return short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt, short_q_a_bullet_prompt, long_q_a_bullet_prompt, conference_q_a_bullet_prompt
 
 
 def load_prompts_judge():
@@ -129,7 +188,7 @@ def load_prompts_judge():
     return q_a_summary_prompt
 
 
-short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt = load_prompts_summarize()
+short_q_a_prompt, long_q_a_prompt, overview_prompt, conference_q_a_prompt, short_q_a_bullet_prompt, long_q_a_bullet_prompt, conference_q_a_bullet_prompt = load_prompts_summarize()
 q_a_summary_prompt = load_prompts_judge()
 
 logger = logging.getLogger("llm_utils")
@@ -170,24 +229,72 @@ def _require_output_structure(d: dict, context: str) -> str:
     return json.dumps(structure, ensure_ascii=False)
 
 
-def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_Q_A, text_format=None) -> dict:
+def get_prompt_config(call_type: str, summary_length: str, answer_format: str = "prose") -> dict:
+    """
+    Centralized function to determine prompt configuration based on call type, summary length, and answer format.
+    Returns a dict with prompt_version, model, and effort_level.
+    """
+    if call_type.lower() == "conference":
+        # Conference calls only have long format
+        if answer_format == "bullet":
+            prompt_version = CONFERENCE_LONG_Q_A_BULLET_PROMPT_VERSION
+        else:
+            prompt_version = CONFERENCE_LONG_Q_A_PROMPT_VERSION
+        model = CONFERENCE_Q_A_MODEL
+        effort_level = EFFORT_LEVEL_Q_A_CONFERENCE
+    else:
+        # Earnings calls
+        if summary_length == "short":
+            if answer_format == "bullet":
+                prompt_version = EARNINGS_SHORT_Q_A_BULLET_PROMPT_VERSION
+            else:
+                prompt_version = EARNINGS_SHORT_Q_A_PROMPT_VERSION
+        else:
+            if answer_format == "bullet":
+                prompt_version = EARNINGS_LONG_Q_A_BULLET_PROMPT_VERSION
+            else:
+                prompt_version = EARNINGS_LONG_Q_A_PROMPT_VERSION
+        model = Q_A_MODEL
+        effort_level = EFFORT_LEVEL_Q_A
+
+    return {
+        "prompt_version": prompt_version,
+        "model": model,
+        "effort_level": effort_level
+    }
+
+
+def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, prompt_version: str, model="gpt-5", effort_level=EFFORT_LEVEL_Q_A, text_format=None, answer_format="prose") -> dict:
 
     logger.info("Calling Summarize Q&A")
     llm_client = get_llm_client(model)
 
-    # Select the appropriate Pydantic model based on call type
+    # Select the appropriate Pydantic model based on call type and answer format
     if text_format is None:
         if call_type == "conference":
-            text_format = ConferenceSummarizeOutputFormat
+            if answer_format == "bullet":
+                text_format = ConferenceSummarizeOutputFormatBullet
+            else:
+                text_format = ConferenceSummarizeOutputFormat
         else:
-            text_format = SummarizeOutputFormat
+            if answer_format == "bullet":
+                text_format = SummarizeOutputFormatBullet
+            else:
+                text_format = SummarizeOutputFormat
 
+    # Get prompts
     if call_type == "conference":
         # Conference calls use the long_conference.json file
-        conference_section = _ensure_dict(conference_q_a_prompt.get(
-            "LONG_CONFERENCE_SUMMARY"), "long_conference.json -> LONG_CONFERENCE_SUMMARY")
+        if answer_format == "bullet":
+            conference_section = _ensure_dict(conference_q_a_bullet_prompt.get(
+                "LONG_CONFERENCE_SUMMARY"), "long_conference_bullet.json -> LONG_CONFERENCE_SUMMARY")
+        else:
+            conference_section = _ensure_dict(conference_q_a_prompt.get(
+                "LONG_CONFERENCE_SUMMARY"), "long_conference.json -> LONG_CONFERENCE_SUMMARY")
         prompts = _ensure_dict(conference_section.get(
-            prompt_version), f"long_conference.json -> LONG_CONFERENCE_SUMMARY['{prompt_version}']")
+            prompt_version), f"conference Q&A prompts['{prompt_version}']")
+
+    # Validate prompts formatting
         system_prompt = _require_str(
             prompts, "system_prompt", "conference Q&A prompts")
         user_prompt = _require_str(
@@ -197,14 +304,21 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         max_output_tokens = _require_params_max_tokens(
             prompts, "conference Q&A prompts")
         effort_level = EFFORT_LEVEL_Q_A_CONFERENCE
-    else:
+
+    else:  # for earnig calls
         effort_level = EFFORT_LEVEL_Q_A
         # Earnings calls use short_q_a.json or long_q_a.json based on summary_length
         if summary_length == "short":
-            short_section = _ensure_dict(short_q_a_prompt.get(
-                "Q_A_SHORT_SUMMARY"), "short_q_a.json -> Q_A_SHORT_SUMMARY")
+            if answer_format == "bullet":
+                short_section = _ensure_dict(short_q_a_bullet_prompt.get(
+                    "Q_A_SHORT_SUMMARY"), "short_q_a_bullet.json -> Q_A_SHORT_SUMMARY")
+            else:
+                short_section = _ensure_dict(short_q_a_prompt.get(
+                    "Q_A_SHORT_SUMMARY"), "short_q_a.json -> Q_A_SHORT_SUMMARY")
             prompts = _ensure_dict(short_section.get(
-                prompt_version), f"short_q_a.json -> Q_A_SHORT_SUMMARY['{prompt_version}']")
+                prompt_version), f"short Q&A prompts['{prompt_version}']")
+
+            # Validate prompts formatting
             system_prompt = _require_str(
                 prompts, "system_prompt", "short Q&A prompts")
             user_prompt = _require_str(
@@ -213,13 +327,17 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
                 prompts, "short Q&A prompts")
             max_output_tokens = _require_params_max_tokens(
                 prompts, "short Q&A prompts")
-           
 
         elif summary_length == "long":
-            long_section = _ensure_dict(long_q_a_prompt.get(
-                "Q_A_SUMMARY"), "long_q_a.json -> Q_A_SUMMARY")
+            if answer_format == "bullet":
+                long_section = _ensure_dict(long_q_a_bullet_prompt.get(
+                    "Q_A_SUMMARY"), "long_q_a_bullet.json -> Q_A_SUMMARY")
+            else:
+                long_section = _ensure_dict(long_q_a_prompt.get(
+                    "Q_A_SUMMARY"), "long_q_a.json -> Q_A_SUMMARY")
+
             prompts = _ensure_dict(long_section.get(
-                prompt_version), f"long_q_a.json -> Q_A_SUMMARY['{prompt_version}']")
+                prompt_version), f"long Q&A prompts['{prompt_version}']")
             system_prompt = _require_str(
                 prompts, "system_prompt", "long Q&A prompts")
             user_prompt = _require_str(
@@ -257,6 +375,7 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
 
         "model": model,
         "summary_length": summary_length,
+        "answer_format": answer_format,
         "prompt_version": prompt_version,
         "effort_level": effort_level,
         "summary_structure": json.loads(output_structure_json),
@@ -381,6 +500,7 @@ def run_overview_workflow(presentation_transcript: str, q_a_summary: str, call_t
         write_call_overview_prompts, "user_prompt", "overview prompts")
     output_structure_json = _require_output_structure(
         write_call_overview_prompts, "overview prompts")
+
     max_output_tokens = _require_params_max_tokens(
         write_call_overview_prompts, "overview prompts")
 
@@ -393,6 +513,7 @@ def run_overview_workflow(presentation_transcript: str, q_a_summary: str, call_t
         system_prompt=processed_system_prompt,
         user_prompt=processed_user_prompt,
         max_output_tokens=max_output_tokens,
+
         text_format=text_format
     )
 
@@ -443,48 +564,3 @@ def run_overview_workflow(presentation_transcript: str, q_a_summary: str, call_t
         "--------------------------- END OF CALL OVERVIEW --------------------------------")
 
     return final_output
-
-
-# summary_output = summarize_q_a(qa_transcript="", call_type="conference call", model="gpt-5-mini",
-#               summary_length="short", prompt_version="version_1")
-
-# judge_q_a_summary(transcript="", q_a_summary=summary_output.get("summary"), summary_structure= summary_output.get("metadata").get("summary_structure"),
-#                   prompt_version="version_1", model="gpt-5-mini")
-
-# summary_output= {
-#     "summary": "No transcript provided",
-#     "metadata": {
-#         "summary_structure": "No summary structure provided"
-#     }
-# }
-
-
-# run_overview_workflow(presentation_transcript="", q_a_summary=summary_output.get("summary"), prompt_version="version_1", call_type="conference call", model="gpt-5-mini")
-
-
-# if __name__ == "__main__":
-#     # Simple retrieval test for overview prompt configuration
-#     try:
-#         from src.config.runtime import OVERVIEW_PROMPT_VERSION
-
-#         section = overview_prompt.get("OVERVIEW")
-#         versions = list(section.keys()) if isinstance(section, dict) else []
-#         selected = section.get(OVERVIEW_PROMPT_VERSION) if isinstance(
-#             section, dict) else None
-#         print({
-#             "available_versions": versions,
-#             "requested_version": OVERVIEW_PROMPT_VERSION,
-#             "selected_is_dict": isinstance(selected, dict),
-#             "has_system_prompt": bool(isinstance(selected, dict) and "system_prompt" in selected),
-#             "has_user_prompt": bool(isinstance(selected, dict) and "user_prompt" in selected),
-#             "has_output_structure": bool(isinstance(selected, dict) and "output_structure" in selected),
-#             "output_structure": selected.get("output_structure") if isinstance(selected, dict) else None,
-#         })
-#     except Exception as e:
-#         print({"error": str(e)})
-# short_q_a_prompt, long_q_a_prompt, overview_prompt = load_prompts_summarize()
-# overview_section = overview_prompt.get("OVERVIEW")
-# print(overview_section)
-# print(overview_section.get("version_2"))
-# print("########################")
-# print(overview_section.get("version_2"))

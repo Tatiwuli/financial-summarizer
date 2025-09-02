@@ -88,9 +88,49 @@ export const ConferenceResult: React.FC<ConferenceResultProps> = ({
                         </Text>
                       </Text>
                       <Text style={styles.answerText}>
-                        <Text style={styles.answerLabel}>A: </Text>
                         <Text style={styles.answerContent}>
-                          {question.answer_summary}
+                          {Array.isArray((question as any).answers) &&
+                          (question as any).answers.length > 0 ? (
+                            (question as any).answers.map(
+                              (ans: any, idx: number) => (
+                                <Text key={idx}>
+                                  <Text style={styles.answerLabel}>A </Text>(
+                                  <Text>{ans.executive}</Text>){"\n"}
+                                  {ans.answer_summary.map(
+                                    (point: string, i: number) => (
+                                      <Text key={i}>
+                                        • {point}
+                                        {i < ans.answer_summary.length - 1
+                                          ? "\n"
+                                          : ""}
+                                      </Text>
+                                    )
+                                  )}
+                                  {idx < (question as any).answers.length - 1
+                                    ? "\n"
+                                    : ""}
+                                </Text>
+                              )
+                            )
+                          ) : (
+                            <Text>
+                              <Text style={styles.answerLabel}>A: </Text>
+                              {Array.isArray(question.answer_summary)
+                                ? question.answer_summary.map(
+                                    (point, index) => (
+                                      <Text key={index}>
+                                        • {point}
+                                        {index <
+                                        (question.answer_summary?.length ?? 0) -
+                                          1
+                                          ? "\n"
+                                          : ""}
+                                      </Text>
+                                    )
+                                  )
+                                : (question as any).answer_summary}
+                            </Text>
+                          )}
                         </Text>
                       </Text>
                     </View>
@@ -159,7 +199,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 4,
-
   },
   answerText: {
     fontSize: 14,
@@ -214,7 +253,6 @@ const styles = StyleSheet.create({
     color: "#000000",
   },
   answerContent: {
-
     color: "#000000",
   },
 })

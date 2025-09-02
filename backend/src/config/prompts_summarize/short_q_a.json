@@ -10,7 +10,7 @@
       },
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -34,7 +34,7 @@
       },
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -58,7 +58,7 @@
       },
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",
@@ -82,7 +82,7 @@
       },
       "output_structure": {
         "title": "[Company name] [Quarter, date if available]",
-        "questions_answers": [
+        "analysts": [
           {
             "name": "[Analyst Name]",
             "firm": "[Firm]",

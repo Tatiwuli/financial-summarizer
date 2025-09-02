@@ -116,7 +116,12 @@ export const useSummaryStore = create<SummaryState>((set) => {
       })
       clearPersistedState()
     },
-    summarize: async (file: any, callType: string, summaryLength: string) => {
+    summarize: async (
+      file: any,
+      callType: string,
+      summaryLength: string,
+      promptVersions?: { q_a?: string; overview?: string; judge?: string }
+    ) => {
       // Start validation flow
       set({
         status: "validating",
@@ -157,7 +162,14 @@ export const useSummaryStore = create<SummaryState>((set) => {
 
         // Validate file
         console.log("[SummaryStore]  await validatePdf")
-        const validation = await validatePdf(file, callType, summaryLength)
+        const answerFormat =
+          promptVersions?.q_a === "bullet" ? "bullet" : "prose"
+        const validation = await validatePdf(
+          file,
+          callType,
+          summaryLength,
+          answerFormat
+        )
         console.log("[SummaryStore] validation response:", validation)
 
         const filename =
@@ -264,11 +276,8 @@ export const useSummaryStore = create<SummaryState>((set) => {
               )
               const overviewFailed =
                 (res.stages && res.stages["overview_summary"]) === "failed"
-              // Get title from Overview or Q&A
-              const title =
-                outputs.q_a_summary?.data?.title ||
-                outputs.overview_summary?.data?.title ||
-                "Untitled"
+              // Get title from Q&A
+              const title = outputs.q_a_summary?.data?.title || "Untitled"
 
               // Get call type from user input
               const callTypeForResult =
@@ -381,10 +390,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
                   const overviewFailed2 =
                     (res2.stages && res2.stages["overview_summary"]) ===
                     "failed"
-                  const title2 =
-                    outputs2.overview_summary?.data?.title ||
-                    outputs2.q_a_summary?.data?.title ||
-                    "Untitled"
+                  const title2 = outputs2.q_a_summary?.data?.title || "Untitled"
                   const callTypeForResult2 =
                     res2.input?.call_type || "conference call"
 

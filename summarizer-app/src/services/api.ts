@@ -24,7 +24,8 @@ export const healthCheck = async (timeoutMs: number = 2000) => {
 export const validatePdf = async (
   file: DocumentPickerAsset,
   callType: string,
-  summaryLength: string
+  summaryLength: string,
+  answerFormat: string = "prose"
 ) => {
   const webFile = (file as any).file as File | undefined
   if (!webFile) {
@@ -36,6 +37,7 @@ export const validatePdf = async (
   formData.append("file", webFile, webFile.name || file.name || "document.pdf")
   formData.append("call_type", callType)
   formData.append("summary_length", summaryLength)
+  formData.append("answer_format", answerFormat)
 
   try {
     // Send POST API request
