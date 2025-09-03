@@ -177,8 +177,8 @@ def load_prompts_summarize():
     with open(os.path.join(conference_dir, 'long_conference_bullet.json'), 'r', encoding='utf-8') as f:
         conference_q_a_bullet_prompt = json.load(f)
 
-    # Overview prompt lives directly under config/
-    with open(os.path.join(base_config_dir, 'overview.json'), 'r', encoding='utf-8') as f:
+    # Overview prompt now lives under config/prompts_summarize/
+    with open(os.path.join(prompts_root, 'overview.json'), 'r', encoding='utf-8') as f:
         overview_prompt = json.load(f)
 
     return (
