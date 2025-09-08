@@ -152,7 +152,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
             // first retry hook: show a friendly message while we attempt retries
             set({
               status: "error",
-              error: "Great things take time! We’re waking up the server for your best experience. This can take ~30s",
+              error: "Great things take time! We’re waking up the server for your best experience. This can take ~50 seconds",
               result: null,
             })
           })
