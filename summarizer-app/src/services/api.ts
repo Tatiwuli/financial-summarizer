@@ -61,6 +61,10 @@ apiClient.interceptors.response.use(
       const delay = INITIAL_BACKOFF_MS * Math.pow(2, currentAttempt)
       console.log(`⏳ Waiting ${delay}ms before retry...`)
       await sleep(delay)
+
+      // Log successful retry connection
+      console.log(`✅ Server connection restored! Retrying ${method} ${url}...`)
+
       return apiClient.request(config)
     }
 
@@ -93,13 +97,21 @@ apiClient.interceptors.response.use(
 
 export const healthCheck = async (
   timeoutMs: number = 2000,
-  onFirstRetry?: () => void
+  onFirstRetry?: () => void,
+  onSuccess?: () => void
 ) => {
   const response = await apiClient.get("/health", {
     timeout: timeoutMs,
     // custom hook consumed by the interceptor
     ...(onFirstRetry ? { __onFirstRetry: onFirstRetry } : {}),
+    ...(onSuccess ? { __onSuccess: onSuccess } : {}),
   } as any)
+
+  // Call success callback if provided
+  if (onSuccess) {
+    onSuccess()
+  }
+
   return response.data
 }
 

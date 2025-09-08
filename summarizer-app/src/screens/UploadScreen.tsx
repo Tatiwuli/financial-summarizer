@@ -9,14 +9,12 @@ import {
 } from "react-native"
 import * as DocumentPicker from "expo-document-picker"
 
-
 import { ToggleButton } from "../components/common/ToggleButton"
 import { useSummaryStore } from "../state/SummaryStore"
 
 type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
 type AnswerFormat = "prose" | "bullet"
-
 
 export const UploadScreen: React.FC = () => {
   //User Inputs
@@ -26,11 +24,12 @@ export const UploadScreen: React.FC = () => {
   const [selectedFile, setSelectedFile] =
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
-// Initialize State 
+  // Initialize State
   const {
     summarize,
     status,
     error,
+    messageType,
     result,
     stage,
     percentComplete,
@@ -85,8 +84,10 @@ export const UploadScreen: React.FC = () => {
         Alert.alert("Select a PDF", "You need to select a PDF.")
         return
       }
-      //Submit file to backend and trigger the workflow 
-      await summarize(selectedFile, callType, summaryLength, { q_a: answerFormat } )
+      //Submit file to backend and trigger the workflow
+      await summarize(selectedFile, callType, summaryLength, {
+        q_a: answerFormat,
+      })
       console.log("[UploadScreen] summarize_endpoint() done")
     } catch (e) {
       console.error("[UploadScreen] handleSubmitFile error:", e)
@@ -99,7 +100,7 @@ export const UploadScreen: React.FC = () => {
       <View style={styles.container}>
         <Text style={styles.title}>New Summary</Text>
 
-      {/* Display Call Type Buttons and save to state*/}
+        {/* Display Call Type Buttons and save to state*/}
         <Text style={styles.label}>Select the call type</Text>
         <View style={styles.toggleGroup}>
           <ToggleButton
@@ -170,7 +171,6 @@ export const UploadScreen: React.FC = () => {
           <Text style={styles.submitButtonText}>Generate Summary</Text>
         </TouchableOpacity>
 
-        
         {/* Display the result */}
         {status === "success" && result && (
           <Text selectable style={{ marginTop: 12 }}>
@@ -180,12 +180,12 @@ export const UploadScreen: React.FC = () => {
 
         {/* Display the validating message */}
         {status === "validating" && (
-          <Text style={{ marginTop: 12, fontSize: 16}}>Validating file</Text>
+          <Text style={{ marginTop: 12, fontSize: 16 }}>Validating file</Text>
         )}
 
         {/* Display the validated message */}
         {status === "validated" && (
-          <Text style={{ marginTop: 12 , fontSize: 16}}>PDF Validated.</Text>
+          <Text style={{ marginTop: 12, fontSize: 16 }}>PDF Validated.</Text>
         )}
 
         {/* Loading/progress view while workflow runs (before navigating to results) */}
@@ -211,7 +211,19 @@ export const UploadScreen: React.FC = () => {
         )}
 
         {/* Display the error message */}
-        {error && <Text style={styles.errorText}>{error}</Text>}
+        {error && (
+          <Text
+            style={
+              messageType === "success"
+                ? styles.successText
+                : messageType === "info"
+                  ? styles.infoText
+                  : styles.errorText
+            }
+          >
+            {error}
+          </Text>
+        )}
       </View>
     </SafeAreaView>
   )
@@ -259,6 +271,13 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
   errorText: { color: "red", textAlign: "center", marginTop: 10 },
+  successText: {
+    color: "#007AFF",
+    textAlign: "center",
+    marginTop: 10,
+    fontWeight: "600",
+  },
+  infoText: { color: "#FF9500", textAlign: "center", marginTop: 10 },
   progressCard: {
     marginTop: 16,
     padding: 16,

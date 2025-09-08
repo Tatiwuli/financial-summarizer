@@ -108,6 +108,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
       set({
         status: "idle",
         error: null,
+        messageType: undefined,
         result: null,
         stage: null,
         percentComplete: null,
@@ -126,6 +127,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
       set({
         status: "validating",
         error: null,
+        messageType: undefined,
         currentCallType: callType as any,
       })
 
@@ -148,14 +150,29 @@ export const useSummaryStore = create<SummaryState>((set) => {
       try {
         // Mandatory health check . Returns error if backend is not available
         try {
-          await healthCheck(2000, () => {
-            // first retry hook: show a friendly message while we attempt retries
-            set({
-              status: "error",
-              error: "Great things take time! We’re waking up the server for your best experience. This can take ~50 seconds",
-              result: null,
-            })
-          })
+          await healthCheck(
+            2000,
+            () => {
+              // first retry hook: show a friendly message while we attempt retries
+              set({
+                status: "error",
+                error:
+                  "Great things take time! We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready.",
+                messageType: "info",
+                result: null,
+              })
+            },
+            () => {
+              // success hook: show ready message when server is back online
+              set({
+                status: "error",
+                error:
+                  "🎉 Ready to go! The server is back online. Click 'Generate Summary' again to continue.",
+                messageType: "success",
+                result: null,
+              })
+            }
+          )
         } catch (_e) {
           set({
             status: "error",
@@ -486,6 +503,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
       set({
         status: "idle",
         error: null,
+        messageType: undefined,
         result: null,
         validation: null,
         currentCallType: undefined,
