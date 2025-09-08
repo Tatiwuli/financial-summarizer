@@ -36,6 +36,19 @@ apiClient.interceptors.response.use(
 
     if (shouldRetry && currentAttempt < MAX_RETRIES) {
       config.__retryCount = currentAttempt + 1
+
+      // Log retry attempt
+      const retryAttempt = currentAttempt + 1
+      const url = config.url || "unknown endpoint"
+      const method = config.method?.toUpperCase() || "UNKNOWN"
+      const errorType = isNetworkError
+        ? "network error"
+        : `server error (${status})`
+
+      console.log(
+        `🔄 API Retry #${retryAttempt}/${MAX_RETRIES} for ${method} ${url} - ${errorType}`
+      )
+
       // fire optional hook on first retry to allow UI messaging
       try {
         if (
@@ -46,8 +59,28 @@ apiClient.interceptors.response.use(
         }
       } catch {}
       const delay = INITIAL_BACKOFF_MS * Math.pow(2, currentAttempt)
+      console.log(`⏳ Waiting ${delay}ms before retry...`)
       await sleep(delay)
       return apiClient.request(config)
+    }
+
+    // Log when retries are exhausted or not applicable
+    if (shouldRetry && currentAttempt >= MAX_RETRIES) {
+      const url = config.url || "unknown endpoint"
+      const method = config.method?.toUpperCase() || "UNKNOWN"
+      const errorType = isNetworkError
+        ? "network error"
+        : `server error (${status})`
+      console.log(
+        `❌ API Retries exhausted (${MAX_RETRIES} attempts) for ${method} ${url} - ${errorType}`
+      )
+    } else if (!shouldRetry) {
+      const url = config.url || "unknown endpoint"
+      const method = config.method?.toUpperCase() || "UNKNOWN"
+      const status = error?.response?.status
+      console.log(
+        `🚫 API request failed (non-retryable) for ${method} ${url} - status: ${status}`
+      )
     }
 
     return Promise.reject(error)
