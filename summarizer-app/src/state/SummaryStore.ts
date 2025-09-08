@@ -148,7 +148,14 @@ export const useSummaryStore = create<SummaryState>((set) => {
       try {
         // Mandatory health check . Returns error if backend is not available
         try {
-          await healthCheck(2000)
+          await healthCheck(2000, () => {
+            // first retry hook: show a friendly message while we attempt retries
+            set({
+              status: "error",
+              error: "Great things take time! We’re waking up the server for your best experience. This can take ~30s",
+              result: null,
+            })
+          })
         } catch (_e) {
           set({
             status: "error",
