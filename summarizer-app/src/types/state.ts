@@ -18,6 +18,7 @@ export interface SummaryState {
   status: SummaryStatus
   error: string | null
   messageType?: "error" | "success" | "info" // Add message type for styling
+  isWaitingForServer?: boolean // Track if user is waiting for server reconnection
   result: any | null // Will be properly typed when we import SummaryResult
   validation: ValidationState | null
   jobId?: string | null

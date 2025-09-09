@@ -109,6 +109,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
         status: "idle",
         error: null,
         messageType: undefined,
+        isWaitingForServer: false,
         result: null,
         stage: null,
         percentComplete: null,
@@ -128,6 +129,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
         status: "validating",
         error: null,
         messageType: undefined,
+        isWaitingForServer: false,
         currentCallType: callType as any,
       })
 
@@ -159,18 +161,23 @@ export const useSummaryStore = create<SummaryState>((set) => {
                 error:
                   "Great things take time! We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready.",
                 messageType: "info",
+                isWaitingForServer: true,
                 result: null,
               })
             },
             () => {
-              // success hook: show ready message when server is back online
-              set({
-                status: "error",
-                error:
-                  "🎉 Ready to go! The server is back online. Click 'Generate Summary' again to continue.",
-                messageType: "success",
-                result: null,
-              })
+              // success hook: show ready message ONLY if user was waiting for server
+              const currentState = useSummaryStore.getState()
+              if (currentState.isWaitingForServer) {
+                set({
+                  status: "error",
+                  error:
+                    "🎉 Ready to go! The server is back online. Click 'Generate Summary' again to continue.",
+                  messageType: "success",
+                  isWaitingForServer: false, // Clear the waiting flag
+                  result: null,
+                })
+              }
             }
           )
         } catch (_e) {
@@ -504,6 +511,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
         status: "idle",
         error: null,
         messageType: undefined,
+        isWaitingForServer: false,
         result: null,
         validation: null,
         currentCallType: undefined,

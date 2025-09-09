@@ -156,19 +156,11 @@ export const UploadScreen: React.FC = () => {
           ) : (
             <View style={{ alignItems: "center" }}>
               <Text style={styles.uploadBoxText}>
-                Upload the transcript in PDF
+                Upload the transcript (Available sources: Bloomberg, AlphaSense, BamSec)
               </Text>
               <Text style={styles.uploadBoxSubtext}>*.pdf (10MB)</Text>
             </View>
           )}
-        </TouchableOpacity>
-
-        {/* Display the submit button */}
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleSubmitFile}
-        >
-          <Text style={styles.submitButtonText}>Generate Summary</Text>
         </TouchableOpacity>
 
         {/* Display the result */}
@@ -187,6 +179,29 @@ export const UploadScreen: React.FC = () => {
         {status === "validated" && (
           <Text style={{ marginTop: 12, fontSize: 16 }}>PDF Validated.</Text>
         )}
+
+        {/* Display the error message */}
+        {error && (
+          <Text
+            style={
+              messageType === "success"
+                ? styles.successText
+                : messageType === "info"
+                  ? styles.infoText
+                  : styles.errorText
+            }
+          >
+            {error}
+          </Text>
+        )}
+
+        {/* Display the submit button */}
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={handleSubmitFile}
+        >
+          <Text style={styles.submitButtonText}>Generate Summary</Text>
+        </TouchableOpacity>
 
         {/* Loading/progress view while workflow runs (before navigating to results) */}
         {/* Display the progress bar */}
@@ -208,21 +223,6 @@ export const UploadScreen: React.FC = () => {
               {Math.round(percentComplete || 0)}%
             </Text>
           </View>
-        )}
-
-        {/* Display the error message */}
-        {error && (
-          <Text
-            style={
-              messageType === "success"
-                ? styles.successText
-                : messageType === "info"
-                  ? styles.infoText
-                  : styles.errorText
-            }
-          >
-            {error}
-          </Text>
         )}
       </View>
     </SafeAreaView>
@@ -270,14 +270,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   submitButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
-  errorText: { color: "red", textAlign: "center", marginTop: 10 },
+  errorText: { color: "red", textAlign: "center", marginTop: 10, fontSize: 16 },
   successText: {
     color: "#007AFF",
     textAlign: "center",
     marginTop: 10,
     fontWeight: "600",
   },
-  infoText: { color: "#FF9500", textAlign: "center", marginTop: 10 },
+  infoText: { color: "#FF9500", textAlign: "center", marginTop: 10, fontSize: 16 },
   progressCard: {
     marginTop: 16,
     padding: 16,
