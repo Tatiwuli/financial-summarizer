@@ -159,7 +159,8 @@ export const useSummaryStore = create<SummaryState>((set) => {
               set({
                 status: "error",
                 error:
-                  "Great things take time! We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready.",
+                  "Great things take time! The current server is running on free tier.We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready."
+                  ,
                 messageType: "info",
                 isWaitingForServer: true,
                 result: null,

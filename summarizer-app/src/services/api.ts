@@ -15,8 +15,8 @@ const apiClient = axios.create({
 apiClient.defaults.timeout = 60000
 
 // Exponential backoff retry configuration
-const MAX_RETRIES = 4 // four retries
-const INITIAL_BACKOFF_MS = 10000 // 10 seconds
+const MAX_RETRIES = 5 // five retries
+const INITIAL_BACKOFF_MS = 30000 // 30 seconds
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
