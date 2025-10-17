@@ -1,5 +1,7 @@
 ## Financial Summarizer (Full Stack)
 
+**Note: this repository is a demo of the financial summarizer web app built for my internship at Kapitalo Investimentos**
+
 Generates structured earnings/conference call summaries from uploaded PDFs. Frontend (React Native + TypeScript) collects inputs and renders results. Backend (FastAPI + Python) validates PDFs, runs LLM workflows, persists job state to a local cache, and exposes REST APIs.
 
 ### Monorepo Layout
