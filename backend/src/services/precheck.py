@@ -9,10 +9,11 @@ import hashlib
 
 class PrecheckError(Exception):
     def __init__(self, code: str, message: str):
-        #Getting the message from the built-in Exception
+        # Getting the message from the built-in Exception
         super().__init__(message)
         self.code = code
-        
+        self.message = message 
+
 
 def run_validate_file(file: UploadFile, call_type: str, summary_length: str, answer_format: str = "prose"):
     processor = create_pdf_processor(save_transcripts_dir=CACHE_DIR)
@@ -29,12 +30,8 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
 
         # DEBUG: Log the extracted content lengths and snippets
         pres_transcript = result.get("presentation_transcript", "")
-        # Fixed: use correct key with underscore
-        qa_transcript = result.get("q_a_transcript", "")
 
-        print(f"[PRECHECK] Presentation length: {len(pres_transcript)}")
-        print(f"[PRECHECK] Q&A length: {len(qa_transcript)}")
-        print(f"[PRECHECK] Q&A transcript exists: {bool(qa_transcript)}")
+        qa_transcript = result.get("q_a_transcript", "")
 
         if pres_transcript:
             print(
@@ -47,11 +44,8 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
             print("[PRECHECK] Q&A transcript is empty or None!")
 
     except PDFProcessingError as e:
-        print(f"[PRECHECK] PDF Processing error: {e}")
-        raise PrecheckError("pdf_processing_error", str(e))
 
-    finally:
-        pass
+        raise PrecheckError("pdf_processing_error", str(e))
 
     # Build payload to persist server-side
     save_transcript_data = {
@@ -61,7 +55,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
             "call_type": call_type,
             "summary_length": summary_length,
             "answer_format": answer_format,
-            "filename": result.get("original_filename"),
+            "filename": os.path.basename(original_filename),
         },
         "transcripts": {
             "presentation": result.get("presentation_transcript") or "",
@@ -76,13 +70,13 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
     combined = (norm_p + "\n\n" + norm_q).encode("utf-8", errors="ignore")
     content_hash = hashlib.sha256(combined).hexdigest()
 
+    save_transcript_data["content_hash"] = content_hash
+
     # Use the literal original filename for the transcript JSON name
-    base_name = os.path.basename(result.get(
-        "original_filename") or "transcript.pdf")
+    base_name = os.path.basename(original_filename or "transcript.pdf")
     json_name = os.path.splitext(base_name)[0] + ".json"
     json_path = os.path.join(CACHE_DIR, json_name)
 
-    save_transcript_data["content_hash"] = content_hash
     save_transcript_data["transcript_name"] = json_name
 
     # If a JSON with the same literal name exists, compare content hashes
@@ -114,7 +108,7 @@ def run_validate_file(file: UploadFile, call_type: str, summary_length: str, ans
             "summary_length": summary_length,
             "answer_format": answer_format,
             # it will be the same with the matched existing file
-            "filename": result.get("original_filename"),
+            "filename": os.path.basename(original_filename),
         },
         "transcript_name": json_name,
     }

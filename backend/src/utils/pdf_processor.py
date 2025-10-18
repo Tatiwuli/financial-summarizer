@@ -30,16 +30,7 @@ class PDFProcessor:
         # Titles of the Q&A sections
         self.qa_patterns = QA_PATTERNS
 
-# ------------------ FUNCTIONS UTILITIES ------------------------------------------------
-
-    def validate_file_size(self, file_path: Path) -> None:
-        file_size = file_path.stat().st_size
-        if file_size > self.max_file_size_bytes:
-            size_mb = file_size / (1024 * 1024)
-            max_mb = self.max_file_size_bytes / (1024 * 1024)
-            raise PDFProcessingError(
-                f"File size ({size_mb:.2f}MB) exceeds maximum allowed size ({max_mb}MB)"
-            )
+# ------------------ FUNCTIONS UTILITIES --------
 
     # Find the body font size
     def analyze_font_styles(self,  doc: fitz.Document) -> float:
@@ -116,7 +107,7 @@ class PDFProcessor:
                             # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
 
-                                if re.search(re.escape(pattern), line_text,flags = re.IGNORECASE):
+                                if re.search(re.escape(pattern), line_text, flags=re.IGNORECASE):
                                     print(
                                         f"[EXTRACT Q&A] Found Q&A pattern: {pattern}")
                                     if line_font_sizes:
@@ -130,16 +121,19 @@ class PDFProcessor:
                                             f"[EXTRACT Q&A] Min title font size: {min_title_font_size}")
                                         print(
                                             f"[EXTRACT Q&A] Is bold: {is_bold}")
-                                        if max_size > (min_title_font_size) or (max_size == min_title_font_size and is_bold):  
+                                        if max_size > (min_title_font_size) or (max_size == min_title_font_size and is_bold):
                                             print(
                                                 f"[EXTRACT Q&A] Found Q&A section at page {page_num}")
                                             q_a_page_num = page_num
                                             return q_a_page_num
                                         elif max_size == min_title_font_size:
                                             # Remove the matched pattern and count remaining words
-                                            remaining_text = re.sub(re.escape(pattern), "", line_text, flag = re.IGNORECASE)
-                                            other_words = re.findall(r"\b\w+\b", remaining_text)
-                                            print(f"[EXTRACT Q&A] Remaining words after removing pattern: {other_words}")
+                                            remaining_text = re.sub(
+                                                re.escape(pattern), "", line_text, flags=re.IGNORECASE)
+                                            other_words = re.findall(
+                                                r"\b\w+\b", remaining_text)
+                                            print(
+                                                f"[EXTRACT Q&A] Remaining words after removing pattern: {other_words}")
                                             if len(other_words) <= 3:
                                                 print(
                                                     f"[EXTRACT Q&A] Accepted (equal size, <=3 other words) at page {page_num}")
@@ -156,7 +150,6 @@ class PDFProcessor:
 
     def extract_text_sections(self, doc: fitz.Document) -> Tuple[str, str]:
 
-        try:
             body_font_size = self.analyze_font_styles(doc)
             print(f"[EXTRACT Q&A] Body font size: {body_font_size}")
 
@@ -167,6 +160,7 @@ class PDFProcessor:
             presentation_transcript = ""
             q_a_transcript = ""
 
+        try:
             # If no Q&A section is found, the whole document is the presentation.
             if qa_start_page is None:
                 print(
@@ -188,25 +182,27 @@ class PDFProcessor:
 
                 qa_start_index = -1
                 lowered_page_text = page_text.lower()
+                #Find the first occurece of q&a title pattern 
                 for pattern in self.qa_patterns:
                   
-                    found_index = lowered_page_text.find(pattern.lower())
-                    if found_index != -1:
+                    found_index = lowered_page_text.find(pattern)
+                    if found_index != -1: #found pattern
+                        
                         if qa_start_index == -1 or found_index < qa_start_index:
                             qa_start_index = found_index
 
-                if qa_start_index != -1:
+                if qa_start_index != -1: #found q_a first occurence 
                     presentation_transcript += page_text[:qa_start_index]
                     q_a_transcript += page_text[qa_start_index:]
                 else:
                     # Fallback if pattern not found on page (should not happen)
                     presentation_transcript += page_text
 
-                # 3. Extract text from the rest of the pages for the Q&A section
+                # Extract text from the rest of the pages for the Q&A section
                 for page_num in range(qa_start_page + 1, len(doc)):
                     q_a_transcript += doc.load_page(page_num).get_text()
 
-            # 4. Clean up and remove potential copyright page from the end
+            # Clean up and remove possible copyright page from the end
             if len(doc) > 1:
                 last_page = doc.load_page(len(doc) - 1)
                 last_page_text = last_page.get_text().strip()
@@ -227,6 +223,7 @@ class PDFProcessor:
                         if q_a_transcript and q_a_transcript.strip().endswith(last_page_text):
                             q_a_transcript = q_a_transcript.strip(
                             )[:-len(last_page_text)].strip()
+                            #if the trnscript doesn't have q&a, but presentation only
                         elif presentation_transcript.strip().endswith(last_page_text):
                             presentation_transcript = presentation_transcript.strip()[
                                 :-len(last_page_text)].strip()
@@ -294,7 +291,6 @@ class PDFProcessor:
             "presentation_text_length": len(presentation_transcript),
             "q_a_transcript": q_a_transcript.strip(),
             "qa_text_length": len(q_a_transcript),
-            "original_filename": (Path(original_filename or "transcript.pdf").name),
         }
 
 
