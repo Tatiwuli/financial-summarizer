@@ -9,12 +9,10 @@ import hashlib
 
 class PrecheckError(Exception):
     def __init__(self, code: str, message: str):
-        # essa mensagem vem do `e` do proprio  exception Exception as e
+        #Getting the message from the built-in Exception
         super().__init__(message)
         self.code = code
-        # esses sao atributos que voce escreve para renderizar no frontend.
-        self.message = message
-
+        
 
 def run_validate_file(file: UploadFile, call_type: str, summary_length: str, answer_format: str = "prose"):
     processor = create_pdf_processor(save_transcripts_dir=CACHE_DIR)

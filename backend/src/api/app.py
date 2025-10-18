@@ -42,28 +42,7 @@ app.add_middleware(
     allow_credentials=False,
 )
 
-# Middleware to log request/response and CORS headers
 
-
-@app.middleware("http")
-async def cors_debug_logger(request: Request, call_next):
-    start_time = time.time()
-    origin = request.headers.get("origin")
-    referer = request.headers.get("referer")
-    host = request.headers.get("host")
-    xff = request.headers.get("x-forwarded-for")
-    xfp = request.headers.get("x-forwarded-proto")
-    logger.info(
-        f"REQ method={request.method} path={request.url.path} origin={origin} referer={referer} host={host} xff={xff} xfp={xfp}"
-    )
-    response = await call_next(request)
-    aco = response.headers.get("access-control-allow-origin")
-    vary = response.headers.get("vary")
-    duration_ms = int((time.time() - start_time) * 1000)
-    logger.info(
-        f"RES path={request.url.path} status={response.status_code} A-C-Allow-Origin={aco} Vary={vary} durMs={duration_ms}"
-    )
-    return response
 
 
 class ErrorDetail(BaseModel):

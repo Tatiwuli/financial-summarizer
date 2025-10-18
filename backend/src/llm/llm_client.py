@@ -153,7 +153,7 @@ class OpenAIClient(BaseLLMClient):
             text=text_output,
             model=self.model,
             input_tokens=in_tok or 0,
-            output_tokens=out_tok or 0,
+            output_tokens=out_tok or 10,
             finish_reason=status,
             parsed=parsed_resp if text_format is not None else None,
             raw=response,

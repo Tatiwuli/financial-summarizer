@@ -26,12 +26,15 @@ class PDFProcessor:
         self.max_file_size_bytes = max_file_size_mb * 1024 * 1024
         self.save_transcripts_dir = Path(save_transcripts_dir)
         self.save_transcripts_dir.mkdir(exist_ok=True)
+        # Titles of the Q&A sections
         self.qa_patterns = QA_PATTERNS
 
 # ------------------ FUNCTIONS UTILITIES ------------------------------------------------
 
     def validate_file_size(self, file_path: Path) -> None:
 
+
+t
         file_size = file_path.stat().st_size
         if file_size > self.max_file_size_bytes:
             size_mb = file_size / (1024 * 1024)
@@ -129,19 +132,24 @@ class PDFProcessor:
                                             f"[EXTRACT Q&A] Min title font size: {min_title_font_size}")
                                         print(
                                             f"[EXTRACT Q&A] Is bold: {is_bold}")
-                                        if max_size > (min_title_font_size) or (max_size == min_title_font_size and is_bold):  # noqa: E50
+                                        if max_size > (min_title_font_size) or (max_size == min_title_font_size and is_bold):  
                                             print(
                                                 f"[EXTRACT Q&A] Found Q&A section at page {page_num}")
                                             q_a_page_num = page_num
                                             return q_a_page_num
-
-                                        # last chance to find Q&A section
                                         elif max_size == min_title_font_size:
-                                            q_a_page_num = page_num
-                                            print(
-                                                f"[EXTRACT Q&A] Same font size - Found Q&A section at page {page_num}")
-
-                                            return q_a_page_num
+                                            # Remove the matched pattern and count remaining words
+                                            remaining_text = re.sub(re.escape(pattern), "", line_text)
+                                            other_words = re.findall(r"\b\w+\b", remaining_text)
+                                            print(f"[EXTRACT Q&A] Remaining words after removing pattern: {other_words}")
+                                            if len(other_words) <= 3:
+                                                print(
+                                                    f"[EXTRACT Q&A] Accepted (equal size, <=3 other words) at page {page_num}")
+                                                q_a_page_num = page_num
+                                                return q_a_page_num
+                                            else:
+                                                print(
+                                                    f"[EXTRACT Q&A] Rejected (equal size, >3 other words) at page {page_num}")
 
             return None
 
