@@ -149,18 +149,15 @@ class PDFProcessor:
             raise PDFProcessingError(f"Failed to find Q&A section: {str(e)}")
 
     def extract_text_sections(self, doc: fitz.Document) -> Tuple[str, str]:
-
+        try:
             body_font_size = self.analyze_font_styles(doc)
             print(f"[EXTRACT Q&A] Body font size: {body_font_size}")
 
-            qa_start_page = self.find_qa_section_title(
-                doc, body_font_size)
+            qa_start_page = self.find_qa_section_title(doc, body_font_size)
             print(f"[EXTRACT Q&A] Q&A start page: {qa_start_page}")
 
             presentation_transcript = ""
             q_a_transcript = ""
-
-        try:
             # If no Q&A section is found, the whole document is the presentation.
             if qa_start_page is None:
                 print(
@@ -182,16 +179,16 @@ class PDFProcessor:
 
                 qa_start_index = -1
                 lowered_page_text = page_text.lower()
-                #Find the first occurece of q&a title pattern 
+                # Find the first occurece of q&a title pattern
                 for pattern in self.qa_patterns:
-                  
-                    found_index = lowered_page_text.find(pattern)
-                    if found_index != -1: #found pattern
-                        
+
+                    found_index = lowered_page_text.find(pattern.lower())
+                    if found_index != -1:  # found pattern
+
                         if qa_start_index == -1 or found_index < qa_start_index:
                             qa_start_index = found_index
 
-                if qa_start_index != -1: #found q_a first occurence 
+                if qa_start_index != -1:  # found q_a first occurence
                     presentation_transcript += page_text[:qa_start_index]
                     q_a_transcript += page_text[qa_start_index:]
                 else:
@@ -223,7 +220,7 @@ class PDFProcessor:
                         if q_a_transcript and q_a_transcript.strip().endswith(last_page_text):
                             q_a_transcript = q_a_transcript.strip(
                             )[:-len(last_page_text)].strip()
-                            #if the trnscript doesn't have q&a, but presentation only
+                            # if the trnscript doesn't have q&a, but presentation only
                         elif presentation_transcript.strip().endswith(last_page_text):
                             presentation_transcript = presentation_transcript.strip()[
                                 :-len(last_page_text)].strip()
