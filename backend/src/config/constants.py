@@ -1,12 +1,15 @@
 
 
 QA_PATTERNS = [
-    "Questions and Answers",
-    "Questions And Answers",
-    "Question And Answer",
-    "Question and Answer",
-    "Questions & Answers",
-    "Question & Answer",
+    "questions and answers",
+    "question and answer",
+    "questions and answer",
+    "question and answers",
+    "questions & answers",
+    "question & answer",
+    "question & answers",
+    "questions & answer",
+   
 ]
 FILESIZE = 10
 

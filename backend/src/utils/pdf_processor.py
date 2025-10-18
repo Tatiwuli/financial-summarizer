@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from statistics import mode, StatisticsError
 import fitz
+
 from src.config.constants import QA_PATTERNS, FILESIZE, CACHE_DIR
 
 
@@ -32,9 +33,6 @@ class PDFProcessor:
 # ------------------ FUNCTIONS UTILITIES ------------------------------------------------
 
     def validate_file_size(self, file_path: Path) -> None:
-
-
-t
         file_size = file_path.stat().st_size
         if file_size > self.max_file_size_bytes:
             size_mb = file_size / (1024 * 1024)
@@ -118,7 +116,7 @@ t
                             # Check if line matches Q&A patterns (case-insensitive)
                             for pattern in self.qa_patterns:
 
-                                if re.search(re.escape(pattern), line_text):
+                                if re.search(re.escape(pattern), line_text,flags = re.IGNORECASE):
                                     print(
                                         f"[EXTRACT Q&A] Found Q&A pattern: {pattern}")
                                     if line_font_sizes:
@@ -139,7 +137,7 @@ t
                                             return q_a_page_num
                                         elif max_size == min_title_font_size:
                                             # Remove the matched pattern and count remaining words
-                                            remaining_text = re.sub(re.escape(pattern), "", line_text)
+                                            remaining_text = re.sub(re.escape(pattern), "", line_text, flag = re.IGNORECASE)
                                             other_words = re.findall(r"\b\w+\b", remaining_text)
                                             print(f"[EXTRACT Q&A] Remaining words after removing pattern: {other_words}")
                                             if len(other_words) <= 3:
@@ -179,19 +177,19 @@ t
             else:
                 print(
                     f"[EXTRACT Q&A] Q&A section found starting at page {qa_start_page}")
-                # 1. Extract text from pages before the Q&A section
+                # Extract text from pages before the Q&A section
                 for page_num in range(qa_start_page):
                     presentation_transcript += doc.load_page(
                         page_num).get_text()
 
-                # 2. Split the page where the Q&A section starts
+                # Split the page where the Q&A section starts
                 page = doc.load_page(qa_start_page)
                 page_text = page.get_text()
 
                 qa_start_index = -1
                 lowered_page_text = page_text.lower()
                 for pattern in self.qa_patterns:
-                    # case-insensitive search- need to check if this is reliable
+                  
                     found_index = lowered_page_text.find(pattern.lower())
                     if found_index != -1:
                         if qa_start_index == -1 or found_index < qa_start_index:
