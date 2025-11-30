@@ -46,7 +46,7 @@ financial-summarizer/
 
 ### State Model (Zustand)
 
-- Global: `status`, `validation`, `result`, `currentCallType`, `jobId`, `stage`, `percentComplete`, `stages`, `warnings`.
+- Global variables: `status`, `validation`, `result`, `currentCallType`, `jobId`, `stage`, `percentComplete`, `stages`, `warnings`.
 - Persisted (localStorage): `status`, `validation`, `result`, `currentCallType`.
 - Local component state: `callType`, `summaryLength`, `answerFormat`, `selectedFile` (not persisted).
 
@@ -104,28 +104,7 @@ backend/
 4. `summary_workflow.run_summary_workflow_from_saved_transcripts`: Q&A → Overview+Judge (parallel), update `status.json`, write outputs.
 5. `summary.get_summary`: Serve current `status` and outputs for polling.
 
-### Deduplication
 
-- Signature = `content_hash + call_type + summary_length + prompt_versions + answer_format` via `job_creation._compute_signature`.
-- Map signature → `job_id` in `local_cache/job_index.json`.
-- `_handle_deduplication` returns existing `job_id` if all outputs are reusable.
-
-### Local Cache
-
-- Transcripts: `local_cache/<original>.pdf.json` (extracted text + content_hash).
-- Jobs: `local_cache/<job_id>/status.json`, `q_a_summary.json`, `overview_summary.json`, `summary_evaluation.json`.
-- Atomic writes and safe reads via `utils/job_utils.py`.
-
-#### Cleanup (TTL)
-
-- Background thread (`utils/cache_cleanup.py::_start_cleanup_thread`) runs a cycle every `CLEANUP_INTERVAL_SECONDS`.
-- Deletes finished jobs older than `RETENTION_DAYS` and any jobs older than `FORCE_CLEANUP_DAYS` (stuck) with job-level locks; prunes `job_index.json`.
-- Note: On Render free tier (autosleeps), cleanup only runs while the service is awake.
-
-### Cancellation
-
-- Frontend calls `POST /cancel?job_id=...`.
-- `JobStatusManager.signal_cancel(job_id)` flips a `threading.Event`; workflow checks the flag at key points and stops quickly; partial outputs are removed; `status.json` marked as cancelled.
 
 ---
 
