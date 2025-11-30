@@ -17,7 +17,7 @@ financial-summarizer/
 ## 1) Tech Stack
 
 - Frontend: React Native (Expo), TypeScript, Zustand, Axios, pdfmake
-- Backend: FastAPI, Python 3.12, PyMuPDF, OpenAI, Google Generative AI, orjson, rich
+- Backend: FastAPI, Python 3.12, PyMuPDF, OpenAI, Gemini 
 - Infra: Local file cache, background threads, Render (deployment)
 
 ---
