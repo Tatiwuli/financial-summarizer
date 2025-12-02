@@ -17,7 +17,7 @@ financial-summarizer/
 ## 1) Tech Stack
 
 - Frontend: React Native (Expo), TypeScript, Zustand, Axios, pdfmake
-- Backend: FastAPI, Python 3.12, PyMuPDF, OpenAI, Google Generative AI, orjson, rich
+- Backend: FastAPI, Python 3.12, PyMuPDF, OpenAI, Gemini 
 - Infra: Local file cache, background threads, Render (deployment)
 
 ---
@@ -46,7 +46,7 @@ financial-summarizer/
 
 ### State Model (Zustand)
 
-- Global: `status`, `validation`, `result`, `currentCallType`, `jobId`, `stage`, `percentComplete`, `stages`, `warnings`.
+- Global variables: `status`, `validation`, `result`, `currentCallType`, `jobId`, `stage`, `percentComplete`, `stages`, `warnings`.
 - Persisted (localStorage): `status`, `validation`, `result`, `currentCallType`.
 - Local component state: `callType`, `summaryLength`, `answerFormat`, `selectedFile` (not persisted).
 
@@ -104,7 +104,6 @@ backend/
 4. `summary_workflow.run_summary_workflow_from_saved_transcripts`: Q&A → Overview+Judge (parallel), update `status.json`, write outputs.
 5. `summary.get_summary`: Serve current `status` and outputs for polling.
 
-### Deduplication
 
 - Signature = `content_hash + call_type + summary_length + prompt_versions + answer_format` via `job_creation._compute_signature`.
 - Map signature → `job_id` in `local_cache/job_index.json`.
