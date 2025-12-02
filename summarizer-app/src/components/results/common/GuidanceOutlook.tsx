@@ -54,37 +54,47 @@ export const GuidanceOutlook: React.FC<GuidanceOutlookProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontWeight: "700",
+    marginBottom: 14,
+    color: "#1A1A1A",
   },
   periodContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
   },
   periodLabel: {
     fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
+    fontWeight: "700",
+    marginBottom: 10,
+    color: "#FF6B54",
   },
   metricItem: {
-    marginLeft: 8,
-    marginBottom: 4,
+    marginLeft: 10,
+    marginBottom: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: "#E5E7EB",
   },
   metricName: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1A1A1A",
   },
   metricDescription: {
     fontSize: 14,
-    color: "#000000",
-    marginLeft: 8,
+    color: "#4B5563",
+    marginTop: 4,
+    lineHeight: 22,
   },
   noDataText: {
     fontSize: 14,
-    color: "#666",
+    color: "#6B7280",
     fontStyle: "italic",
   },
 })

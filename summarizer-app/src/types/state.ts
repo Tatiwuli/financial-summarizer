@@ -49,29 +49,29 @@ export interface PromptVersionConfig {
   judge?: string
 }
 
-export interface AvailablePromptVersions {
-  earnings: {
-    long: {
-      q_a: string[]
-      overview: string[]
-      judge: string[]
-    }
-    short: {
-      q_a: string[]
-      overview: string[]
-      judge: string[]
-    }
-  }
-  conference: {
-    long: {
-      q_a: string[]
-      overview: string[]
-      judge: string[]
-    }
-    short: {
-      q_a: string[]
-      overview: string[]
-      judge: string[]
-    }
-  }
-}
+// export interface AvailablePromptVersions {
+//   earnings: {
+//     long: {
+//       q_a: string[]
+//       overview: string[]
+//       judge: string[]
+//     }
+//     short: {
+//       q_a: string[]
+//       overview: string[]
+//       judge: string[]
+//     }
+//   }
+//   conference: {
+//     long: {
+//       q_a: string[]
+//       overview: string[]
+//       judge: string[]
+//     }
+//     short: {
+//       q_a: string[]
+//       overview: string[]
+//       judge: string[]
+//     }
+//   }
+// }

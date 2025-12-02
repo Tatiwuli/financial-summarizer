@@ -25,7 +25,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error?.config || {}
-    // Axios typing doesn't include custom fields; use duck-typing
+
     const currentAttempt: number = (config.__retryCount as number) ?? 0
 
     const status: number | undefined = error?.response?.status
@@ -133,15 +133,11 @@ export const validatePdf = async (
   formData.append("summary_length", summaryLength)
   formData.append("answer_format", answerFormat)
 
-  try {
-    // Send POST API request
+  // Send POST API request
     const response = await apiClient.post("/validate_file", formData)
     // Parse the response
     return response.data as ValidationResponse
-  } catch (error) {
-    throw error
-  }
-}
+  } 
 
 export const getSummary = async (jobId: string): Promise<SummaryResponse> => {
   // GET request with a job id

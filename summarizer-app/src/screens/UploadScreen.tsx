@@ -6,25 +6,46 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ScrollView,
 } from "react-native"
 import * as DocumentPicker from "expo-document-picker"
 
-import { ToggleButton } from "../components/common/ToggleButton"
 import { useSummaryStore } from "../state/SummaryStore"
 
 type CallType = "earnings" | "conference"
 type SummaryLength = "long" | "short"
 type AnswerFormat = "prose" | "bullet"
 
+//  toggle component
+const PillToggle: React.FC<{
+  label: string
+  isActive: boolean
+  onPress: () => void
+  disabled?: boolean
+}> = ({ label, isActive, onPress, disabled }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={disabled}
+    style={[
+      styles.pill,
+      isActive && styles.pillActive,
+      disabled && styles.pillDisabled,
+    ]}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+)
+
 export const UploadScreen: React.FC = () => {
-  //User Inputs
   const [callType, setCallType] = useState<CallType>("earnings")
   const [summaryLength, setSummaryLength] = useState<SummaryLength>("long")
   const [answerFormat, setAnswerFormat] = useState<AnswerFormat>("prose")
   const [selectedFile, setSelectedFile] =
     useState<DocumentPicker.DocumentPickerAsset | null>(null)
 
-  // Initialize State
   const {
     summarize,
     status,
@@ -58,11 +79,10 @@ export const UploadScreen: React.FC = () => {
         return
       }
 
-      // Check if file is larger than 10MB
-      const maxSizeBytes = 10 * 1024 * 1024 // 10MB
+      const maxSizeBytes = 10 * 1024 * 1024
       if (typeof file.size === "number" && file.size > maxSizeBytes) {
         Alert.alert(
-          "Erro",
+          "Error",
           "File is larger than 10MB. Please select a smaller PDF."
         )
         return
@@ -97,217 +117,474 @@ export const UploadScreen: React.FC = () => {
   // Render the UI
   return (
     <SafeAreaView style={styles.wrapper}>
-      <View style={styles.container}>
-        <Text style={styles.title}>New Summary</Text>
-
-        {/* Display Call Type Buttons and save to state*/}
-        <Text style={styles.label}>Select the call type</Text>
-        <View style={styles.toggleGroup}>
-          <ToggleButton
-            label="Earnings Call"
-            isActive={callType === "earnings"}
-            onPress={() => setCallType("earnings")}
-          />
-          {
-            <ToggleButton
-              label="Conference Call"
-              isActive={callType === "conference"}
-              onPress={() => setCallType("conference")}
-            />
-          }
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Summarize</Text>
+          <Text style={styles.subtitle}>
+            Transform transcripts into actionable insights
+          </Text>
         </View>
 
-        {/* Display Summary Length Buttons and save to state*/}
-        <Text style={styles.label}>Select the summary length</Text>
-        <View style={styles.toggleGroup}>
-          <ToggleButton
-            label="Long Summary"
-            isActive={summaryLength === "long"}
-            onPress={() => setSummaryLength("long")}
-          />
-          <ToggleButton
-            label="Short Summary"
-            isActive={summaryLength === "short"}
-            onPress={() => setSummaryLength("short")}
-            disabled={callType === "conference"}
-            style={callType === "conference" ? { opacity: 0.6 } : undefined}
-          />
+        {/* Options Card */}
+        <View style={styles.card}>
+          {/* Call Type */}
+          <View style={styles.optionSection}>
+            <Text style={styles.optionLabel}>Call Type</Text>
+            <View style={styles.pillGroup}>
+              <PillToggle
+                label="Earnings"
+                isActive={callType === "earnings"}
+                onPress={() => setCallType("earnings")}
+              />
+              <PillToggle
+                label="Conference"
+                isActive={callType === "conference"}
+                onPress={() => setCallType("conference")}
+              />
+            </View>
+          </View>
+
+          {/* Summary Length */}
+          <View style={styles.optionSection}>
+            <Text style={styles.optionLabel}>Length</Text>
+            <View style={styles.pillGroup}>
+              <PillToggle
+                label="Long"
+                isActive={summaryLength === "long"}
+                onPress={() => setSummaryLength("long")}
+              />
+              <PillToggle
+                label="Short"
+                isActive={summaryLength === "short"}
+                onPress={() => setSummaryLength("short")}
+                disabled={callType === "conference"}
+              />
+            </View>
+          </View>
+
+          {/* Answer Format */}
+          <View style={styles.optionSection}>
+            <Text style={styles.optionLabel}>Format</Text>
+            <View style={styles.pillGroup}>
+              <PillToggle
+                label="Prose"
+                isActive={answerFormat === "prose"}
+                onPress={() => setAnswerFormat("prose")}
+              />
+              <PillToggle
+                label="Bullets"
+                isActive={answerFormat === "bullet"}
+                onPress={() => setAnswerFormat("bullet")}
+              />
+            </View>
+          </View>
         </View>
 
-        {/* Display Answer Format Buttons and save to state*/}
-        <Text style={styles.label}>Select the answer format</Text>
-        <View style={styles.toggleGroup}>
-          <ToggleButton
-            label="Prose Format"
-            isActive={answerFormat === "prose"}
-            onPress={() => setAnswerFormat("prose")}
-          />
-          <ToggleButton
-            label="Bullet Points"
-            isActive={answerFormat === "bullet"}
-            onPress={() => setAnswerFormat("bullet")}
-          />
-        </View>
-
-        {/* Display the uploaded file */}
-        <TouchableOpacity style={styles.uploadBox} onPress={handleSelectFile}>
+        {/* Upload Area */}
+        <TouchableOpacity
+          style={[styles.uploadArea, selectedFile && styles.uploadAreaActive]}
+          onPress={handleSelectFile}
+          activeOpacity={0.8}
+        >
           {selectedFile ? (
-            <Text style={styles.uploadBoxText}>{selectedFile.name}</Text>
-          ) : (
-            <View style={{ alignItems: "center" }}>
-              <Text style={styles.uploadBoxText}>
-                Upload the transcript (Available sources: Bloomberg, AlphaSense, BamSec)
+            <View style={styles.uploadContent}>
+              <View style={styles.fileIcon}>
+                <Text style={styles.fileIconText}>PDF</Text>
+              </View>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {selectedFile.name}
               </Text>
-              <Text style={styles.uploadBoxSubtext}>*.pdf (10MB)</Text>
+              <Text style={styles.tapToChange}>Tap to change</Text>
+            </View>
+          ) : (
+            <View style={styles.uploadContent}>
+              <View style={styles.uploadIcon}>
+                <Text style={styles.uploadIconText}>↑</Text>
+              </View>
+              <Text style={styles.uploadTitle}>Upload Transcript</Text>
+              <Text style={styles.uploadHint}>
+                Bloomberg · AlphaSense · BamSec
+              </Text>
+              <Text style={styles.uploadLimit}>PDF up to 10MB</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* Display the result */}
-        {status === "success" && result && (
-          <Text selectable style={{ marginTop: 12 }}>
-            {JSON.stringify(result, null, 2)}
-          </Text>
-        )}
-
-        {/* Display the validating message */}
+        {/* Status Messages */}
         {status === "validating" && (
-          <Text style={{ marginTop: 12, fontSize: 16 }}>Validating file</Text>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>Validating...</Text>
+          </View>
         )}
 
         {/* Display the validated message */}
         {status === "validated" && (
-          <Text style={{ marginTop: 12, fontSize: 16 }}>PDF Validated.</Text>
+          <View style={[styles.statusBadge, styles.statusSuccess]}>
+            <Text style={[styles.statusText, styles.statusTextSuccess]}>
+              ✓ Validated
+            </Text>
+          </View>
         )}
 
-        {/* Display the error message */}
         {error && (
-          <Text
-            style={
+          <View
+            style={[
+              styles.statusBadge,
               messageType === "success"
-                ? styles.successText
+                ? styles.statusSuccess
                 : messageType === "info"
-                  ? styles.infoText
-                  : styles.errorText
-            }
+                  ? styles.statusInfo
+                  : styles.statusError,
+            ]}
           >
-            {error}
-          </Text>
+            <Text
+              style={[
+                styles.statusText,
+                messageType === "success"
+                  ? styles.statusTextSuccess
+                  : messageType === "info"
+                    ? styles.statusTextInfo
+                    : styles.statusTextError,
+              ]}
+            >
+              {error}
+            </Text>
+          </View>
         )}
 
-        {/* Display the submit button */}
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleSubmitFile}
-        >
-          <Text style={styles.submitButtonText}>Generate Summary</Text>
-        </TouchableOpacity>
-
-        {/* Loading/progress view while workflow runs (before navigating to results) */}
-        {/* Display the progress bar */}
+        {/* Progress Card */}
         {status === "loading" && (
           <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>Processing</Text>
-            <Text style={styles.progressSubtitle}>{formatStage(stage)}</Text>
-            <View style={styles.progressBarOuter}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressStage}>{formatStage(stage)}</Text>
+              <Text style={styles.progressPercent}>
+                {Math.round(percentComplete || 0)}%
+              </Text>
+            </View>
+            <View style={styles.progressTrack}>
               <View
                 style={[
-                  styles.progressBarInner,
+                  styles.progressFill,
                   {
                     width: `${Math.max(0, Math.min(100, percentComplete || 0))}%`,
                   },
                 ]}
               />
             </View>
-            <Text style={styles.progressPercent}>
-              {Math.round(percentComplete || 0)}%
+          </View>
+        )}
+
+        {/* Result */}
+        {status === "success" && result && (
+          <View style={styles.resultCard}>
+            <Text selectable style={styles.resultText}>
+              {JSON.stringify(result, null, 2)}
             </Text>
           </View>
         )}
+      </ScrollView>
+
+      {/* Fixed Bottom CTA */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[
+            styles.submitButton,
+            (!selectedFile || status === "loading") &&
+              styles.submitButtonDisabled,
+          ]}
+          onPress={handleSubmitFile}
+          activeOpacity={0.85}
+          disabled={status === "loading"}
+        >
+          <Text style={styles.submitButtonText}>
+            {status === "loading" ? "Processing..." : "Generate Summary"}
+          </Text>
+          {status !== "loading" && <Text style={styles.submitArrow}>→</Text>}
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1, backgroundColor: "#FFFFFF" },
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 30 },
-  label: { fontSize: 16, color: "rgb(0, 0, 0)", marginBottom: 10 },
-  toggleGroup: {
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 140,
+  },
+
+  // Header
+  header: {
+    marginBottom: 36,
+  },
+  title: {
+    fontSize: 42,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    letterSpacing: -1,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 17,
+    color: "#6B7280",
+    fontWeight: "400",
+  },
+
+  // Card
+  card: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 20,
+    padding: 28,
+    marginBottom: 24,
+  },
+  optionSection: {
+    marginBottom: 28,
+  },
+  optionLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 14,
+  },
+  pillGroup: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    columnGap: 12,
-    marginBottom: 20,
+    gap: 12,
   },
-  toggleButton: {
+
+  // Pills
+  pill: {
     paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    minHeight: "30%",
+    paddingHorizontal: 28,
+    borderRadius: 100,
+    backgroundColor: "#E5E7EB",
   },
-  uploadBox: {
-    borderWidth: 2,
-    borderColor: "#C7C7CC",
-    borderStyle: "dashed",
-    borderRadius: 12,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F9F9F9",
-    minHeight: 150,
-    marginTop: 20,
+  pillActive: {
+    backgroundColor: "#FF6B54",
   },
-  uploadBoxText: { fontSize: 16, color: "#666", fontWeight: "500" },
-  uploadBoxSubtext: { fontSize: 14, color: "#8A8A8E", marginTop: 5 },
-  submitButton: {
-    backgroundColor: "#007AFF",
-    borderRadius: 12,
-    padding: 15,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: "auto",
-    marginBottom: 20,
+  pillDisabled: {
+    opacity: 0.4,
   },
-  submitButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
-  errorText: { color: "red", textAlign: "center", marginTop: 10, fontSize: 16 },
-  successText: {
-    color: "#007AFF",
-    textAlign: "center",
-    marginTop: 10,
+  pillText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  pillTextActive: {
+    color: "#FFFFFF",
     fontWeight: "600",
   },
-  infoText: { color: "#FF9500", textAlign: "center", marginTop: 10, fontSize: 16 },
-  progressCard: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E5EA",
-    backgroundColor: "#FAFAFA",
+
+  // Upload Area
+  uploadArea: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 20,
+    padding: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+    marginBottom: 24,
   },
-  progressTitle: { fontSize: 18, fontWeight: "600", marginBottom: 4 },
-  progressSubtitle: { fontSize: 14, color: "#3C3C43", marginBottom: 10 },
-  progressBarOuter: {
-    height: 10,
-    width: "100%",
-    backgroundColor: "#EEE",
-    borderRadius: 6,
+  uploadAreaActive: {
+    borderColor: "#FF6B54",
+    borderStyle: "solid",
+    backgroundColor: "#FFF5F3",
+  },
+  uploadContent: {
+    alignItems: "center",
+  },
+  uploadIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FF6B54",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  uploadIconText: {
+    fontSize: 28,
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  uploadTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 8,
+  },
+  uploadHint: {
+    fontSize: 15,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  uploadLimit: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
+
+  // File Selected State
+  fileIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    backgroundColor: "#FF6B54",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  fileIconText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  fileName: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 4,
+    maxWidth: 280,
+  },
+  tapToChange: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+
+  // Status Badges
+  statusBadge: {
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    marginBottom: 18,
+  },
+  statusSuccess: {
+    backgroundColor: "rgba(52, 199, 89, 0.12)",
+  },
+  statusInfo: {
+    backgroundColor: "rgba(255, 159, 10, 0.12)",
+  },
+  statusError: {
+    backgroundColor: "rgba(255, 69, 58, 0.12)",
+  },
+  statusText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#374151",
+    textAlign: "center",
+  },
+  statusTextSuccess: {
+    color: "#22C55E",
+  },
+  statusTextInfo: {
+    color: "#F59E0B",
+  },
+  statusTextError: {
+    color: "#EF4444",
+  },
+
+  // Progress Card
+  progressCard: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 18,
+    padding: 22,
+    marginBottom: 18,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  progressStage: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1A1A1A",
+  },
+  progressPercent: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FF6B54",
+  },
+  progressTrack: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
     overflow: "hidden",
   },
-  progressBarInner: {
-    height: 10,
-    backgroundColor: "#007AFF",
+  progressFill: {
+    height: 8,
+    backgroundColor: "#FF6B54",
+    borderRadius: 4,
   },
-  progressPercent: { marginTop: 8, fontSize: 12, color: "#6B7280" },
+
+  // Result Card
+  resultCard: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 18,
+    padding: 18,
+  },
+  resultText: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "monospace",
+  },
+
+  // Bottom Bar
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 24,
+    paddingBottom: 40,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  submitButton: {
+    backgroundColor: "#FF6B54",
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#D1D5DB",
+  },
+  submitButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  submitArrow: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
 })
 
 function formatStage(s?: string | null): string {
   if (!s) return "Starting..."
   const key = String(s).toLowerCase()
   const map: Record<string, string> = {
-    q_a_summary: "Q&A summary",
-    overview_summary: "Overview summary",
+    q_a_summary: "Q&A Summary",
+    overview_summary: "Overview Summary",
     summary_evaluation: "Evaluation",
     validating: "Validating",
     cancelled: "Cancelled",

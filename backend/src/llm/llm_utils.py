@@ -282,6 +282,8 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
 
     logger.info("Calling Summarize Q&A")
     llm_client = get_llm_client(model)
+    
+    logger.info("Initiated llm")
 
     # Select the appropriate Pydantic model based on call type and answer format
     if text_format is None:
@@ -364,8 +366,8 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
     processed_user_prompt = user_prompt.format(TRANSCRIPT=qa_transcript)
     processed_system_prompt = system_prompt.format(
         OUTPUT_STRUCTURE=output_structure_json, CALL_TYPE=call_type)
-
-    # error de output eh feito ja no llm client
+    
+    logger.info("finishing processing the prompts. Generating the summary now")
     llm_response = llm_client.generate(
 
         system_prompt=processed_system_prompt,
@@ -375,9 +377,10 @@ def summarize_q_a(qa_transcript: str, call_type: str, summary_length: str, promp
         text_format=text_format
     )
 
-    summary_text = llm_response.text  # to pass to jduge llm
+    
+    summary_text = llm_response.text  # to pass to judge llm
     summary_obj = llm_response.parsed
-
+   
     # Round time to 0 decimals for metadata
     rounded_time = None
     if llm_response.duration_seconds is not None:

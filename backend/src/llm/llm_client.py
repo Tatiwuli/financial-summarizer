@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 from typing import Optional, Type, Any
 import time
 
-import google.generativeai as genai
-from google.generativeai import types
+# import google.generativeai as genai
+# from google.generativeai import types
 from openai import OpenAI
 
 
@@ -54,11 +54,12 @@ class BaseLLMClient(ABC):
 class OpenAIClient(BaseLLMClient):
     """LLM Client for OpenAI's GPT models."""
 
-    def __init__(self, model: str):
+    def __init__(self, model: str = "gpt-5-mini"):
         super().__init__(model)
 
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = OpenAI(api_key=api_key)
+        print("api key: ", api_key)
 
     def generate(self, system_prompt: str, user_prompt: str, max_output_tokens: int,
                  effort_level: Optional[str] = "medium",
@@ -80,12 +81,17 @@ class OpenAIClient(BaseLLMClient):
             #Track output generation time
             start_time = time.time()
 
+            # Initialize status to a default value
+            status = "unknown"
+
             # Use raw responses to access headers for rate limit info
+            print("calling llm")
             if text_format is not None:
                 raw_api_resp = self.client.responses.with_raw_response.parse(
                     **base,
                     text_format=text_format,
                 )
+                print("Got LLM response")
                 response = raw_api_resp.parse()
 
                 text_output = getattr(response, "output_text", "") or ""
@@ -175,4 +181,24 @@ class LLMClientError(Exception):
     """Custom exception for all LLM client errors."""
     pass
 
-
+if __name__ == "__main__":
+    try:
+        print("Initializing OpenAI Client...")
+        client = get_llm_client("gpt-5-mini") 
+        
+        print("Generating response...")
+        response = client.generate(
+            system_prompt="You are a helpful assistant.",
+            user_prompt="Hello! Can you say 'Test successful'?",
+            max_output_tokens= 4000
+        )
+        
+        print("\n--- Response ---")
+        print("Response: ", response)
+        print(f"Text: {response.text}")
+        print(f"Model: {response.model}")
+        print(f"Duration: {response.duration_seconds}s")
+        print("----------------")
+        
+    except Exception as e:
+        print(f"\nError: {e}")

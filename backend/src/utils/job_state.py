@@ -1,26 +1,24 @@
 import threading
-from typing import Dict, Optional, Any
-from enum import Enum
-
-
-import threading
 import os
 import json
 import logging
-from typing import Dict
+from typing import Dict, Optional, Any
 from datetime import datetime
+from enum import Enum
 
 
 logger = logging.getLogger(__name__)
 
 
 class Stage(str, Enum):
+    """standarize the stage namings"""
     QA_SUMMARY = "q_a_summary"
     OVERVIEW = "overview_summary"
     JUDGE = "summary_evaluation"
 
 
 class Status(str, Enum):
+    """standarize the status namings"""
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -33,8 +31,8 @@ class JobStatusManager:
 
     def __init__(self, job_dir: Optional[str]):
         self.job_dir = job_dir
-        self.is_managed = job_dir is not None
-        if self.is_managed:
+        self.has_job_directory = job_dir is not None
+        if self.has_job_directory:
             self.status_path = os.path.join(job_dir, "status.json")
             self.job_id = os.path.basename(job_dir)
             self.lock = JobStatusManager.get_lock_for_job(self.job_id)
@@ -99,18 +97,7 @@ class JobStatusManager:
         except Exception:
             return datetime.now()
 
-    @staticmethod
-    def read_job_index(path: str) -> dict:
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, dict) else {}
-        except FileNotFoundError:
-            return {}
-        except Exception as e:
-            logging.warning("Failed to read job index %s: %s", path, e)
-            return {}
-
+   
     @staticmethod
     def write_json_atomic(path: str, data: dict) -> None:
         try:
@@ -133,7 +120,7 @@ class JobStatusManager:
                 pass
 
     def _read_status(self) -> Dict[str, Any]:
-        if not self.is_managed:
+        if not self.has_job_directory:
             return {}
         try:
             with open(self.status_path, "r", encoding="utf-8") as f:
@@ -142,24 +129,10 @@ class JobStatusManager:
             logger.warning(f"Failed to read status for job {self.job_id}: {e}")
             return {}
 
-    def _write_status(self, status: Dict[str, Any]) -> bool:
-        if not self.is_managed:
-            return True
-        tmp_path = f"{self.status_path}.tmp"
-        try:
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(status, f, ensure_ascii=False)
-            os.replace(tmp_path, self.status_path)
-            return True
-        except Exception as e:
-            logger.exception(
-                f"Failed to write status for job {self.job_id}: {e}")
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            return False
+
 
     def update_status(self, updates: Dict[str, Any]):
-        if not self.is_managed:
+        if not self.has_job_directory:
             return
         with self.lock:
             status = self._read_status()
@@ -173,8 +146,24 @@ class JobStatusManager:
             status["updated_at"] = datetime.now().isoformat()
             self._write_status(status)
 
+    def _write_status(self, status: Dict[str, Any]) -> bool:
+        if not self.has_job_directory:
+            return True
+        tmp_path = f"{self.status_path}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(status, f, ensure_ascii=False)
+            os.replace(tmp_path, self.status_path)
+            return True
+        except Exception as e:
+            logger.exception(
+                f"Failed to write status for job {self.job_id}: {e}")
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            return False
+            
     def add_warning(self, message: str):
-        if not self.is_managed:
+        if not self.has_job_directory:
             return
         with self.lock:
             status = self._read_status()
@@ -196,7 +185,7 @@ class JobStatusManager:
         })
 
     def is_job_complete(self) -> bool:
-        if not self.is_managed:
+        if not self.has_job_directory:
             return False
         status = self._read_status()
         stages = status.get("stages", {})
@@ -207,26 +196,3 @@ class JobStatusManager:
             Status.COMPLETED.value, Status.FAILED.value)
         return qa_done and ov_terminal and judge_terminal
 
-
-# ---------------CANCEL EVENTS---------------
-# Process-local registry of cancel events per job_id
-class JobStatusManager(JobStatusManager):
-    # Class-level cancel events registry
-    _CANCEL_EVENTS: Dict[str, threading.Event] = {}
-
-    @classmethod
-    def register_cancel_event(cls, job_id: str, event: threading.Event) -> None:
-        cls._CANCEL_EVENTS[job_id] = event
-
-    @classmethod
-    def signal_cancel(cls, job_id: str) -> None:
-        evt = cls._CANCEL_EVENTS.get(job_id)
-        if evt is not None:
-            try:
-                evt.set()
-            except Exception:
-                pass
-
-    @classmethod
-    def get_cancel_event(cls, job_id: str) -> Optional[threading.Event]:
-        return cls._CANCEL_EVENTS.get(job_id)

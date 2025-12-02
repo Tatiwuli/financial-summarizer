@@ -65,7 +65,7 @@ def _job_is_terminal(job_dir: str) -> bool:
 
 
 # Helper function to read job index
-def _read_job_index(path: str) -> dict:
+def _read_json_file(path: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -75,7 +75,6 @@ def _read_job_index(path: str) -> dict:
     except Exception as e:
         logging.warning("Failed to read job index %s: %s", path, e)
         return {}
-
 
 
 # Helper function to write a JSON file atomically
@@ -89,10 +88,13 @@ def _write_json_atomic(path: str, data: dict) -> None:
                 f.flush()
                 os.fsync(f.fileno())
             except Exception:
+                # if file to write temporary path, maintain the original path
                 pass
+
         os.replace(tmp, path)
     except Exception as e:
         logging.exception("Failed to atomically write %s: %s", path, e)
+        # cleanup
         try:
             if os.path.exists(tmp):
                 os.remove(tmp)

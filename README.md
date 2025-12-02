@@ -99,7 +99,7 @@ backend/
 ### Workflow (Backend)
 
 1. `precheck.run_validate_file`: Validate PDF, extract transcripts, compute `content_hash`, persist `transcript_name.json`.
-2. `file_validation.validate_file_endpoint`: If validated, try `_handle_deduplication`; else `_create_new_job`.
+2. `file_validation.validate_file_endpoint`: If validated, try `_reuse_existing_job`; else `_create_new_job`.
 3. `job_creation._create_new_job`: Create `job_id/`, write `status.json`, start background thread.
 4. `summary_workflow.run_summary_workflow_from_saved_transcripts`: Q&A → Overview+Judge (parallel), update `status.json`, write outputs.
 5. `summary.get_summary`: Serve current `status` and outputs for polling.
@@ -108,7 +108,7 @@ backend/
 
 - Signature = `content_hash + call_type + summary_length + prompt_versions + answer_format` via `job_creation._compute_signature`.
 - Map signature → `job_id` in `local_cache/job_index.json`.
-- `_handle_deduplication` returns existing `job_id` if all outputs are reusable.
+- `_reuse_existing_job` returns existing `job_id` if all outputs are reusable.
 
 ### Local Cache
 

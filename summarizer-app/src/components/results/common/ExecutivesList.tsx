@@ -37,28 +37,33 @@ export const ExecutivesList: React.FC<ExecutivesListProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontWeight: "700",
+    marginBottom: 12,
+    color: "#1A1A1A",
   },
   executiveItem: {
-    marginBottom: 4,
+    marginBottom: 8,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#FF6B54",
   },
   executiveName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
+    color: "#1A1A1A",
   },
   executiveRole: {
-    fontSize: 12,
-    color: "#666",
-    marginLeft: 8,
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
   },
   noDataText: {
     fontSize: 14,
-    color: "#666",
+    color: "#6B7280",
     fontStyle: "italic",
   },
 })

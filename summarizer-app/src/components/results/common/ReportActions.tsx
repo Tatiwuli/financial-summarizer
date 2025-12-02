@@ -34,7 +34,7 @@ export const ReportActions: React.FC<ReportActionsProps> = ({
           <Ionicons
             name={reportCopied ? "checkmark" : "copy-outline"}
             size={16}
-            color={reportCopied ? "#4CAF50" : "#007AFF"}
+            color={reportCopied ? "#22C55E" : "#FF6B54"}
           />
           <Text
             style={[
@@ -54,7 +54,7 @@ export const ReportActions: React.FC<ReportActionsProps> = ({
           <Ionicons
             name="document-outline"
             size={16}
-            color={Platform.OS === "web" ? "#007AFF" : "#999"}
+            color={Platform.OS === "web" ? "#FF6B54" : "#9CA3AF"}
           />
           <Text
             style={[
@@ -80,38 +80,38 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
   },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: "#f8f9fa",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#E5E7EB",
   },
   actionButtonCopied: {
-    backgroundColor: "#e8f5e8",
-    borderColor: "#4CAF50",
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderColor: "#22C55E",
   },
   actionButtonText: {
-    marginLeft: 4,
-    fontSize: 12,
-    color: "#007AFF",
-    fontWeight: "500",
+    marginLeft: 6,
+    fontSize: 14,
+    color: "#FF6B54",
+    fontWeight: "600",
   },
   actionButtonTextCopied: {
-    color: "#4CAF50",
+    color: "#22C55E",
   },
   actionButtonTextDisabled: {
-    color: "#999",
+    color: "#9CA3AF",
   },
   pdfMessage: {
     textAlign: "center",
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 6,
   },
 })

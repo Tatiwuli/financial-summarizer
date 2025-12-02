@@ -873,23 +873,59 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
   if (!result) {
     return (
       <SafeAreaView style={styles.wrapper}>
-        <View style={{ padding: 20 }}>
-          <Text style={{ marginBottom: 10 }}>Preparing results...</Text>
-          <Text style={{ marginBottom: 4 }}>Stage: {formatStage(stage)}</Text>
-          <View style={styles.progressBarOuter}>
-            <View
-              style={[
-                styles.progressBarInner,
-                {
-                  width: `${Math.max(0, Math.min(100, percentComplete || 0))}%`,
-                },
-              ]}
-            />
+        <View style={{ padding: 24, flex: 1, justifyContent: "center" }}>
+          <View
+            style={{
+              backgroundColor: "#F8F9FA",
+              borderRadius: 20,
+              padding: 32,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "700",
+                color: "#1A1A1A",
+                marginBottom: 8,
+              }}
+            >
+              Preparing results...
+            </Text>
+            <Text
+              style={{
+                fontSize: 16,
+                color: "#6B7280",
+                marginBottom: 20,
+              }}
+            >
+              {formatStage(stage)}
+            </Text>
+            <View style={styles.progressBarOuter}>
+              <View
+                style={[
+                  styles.progressBarInner,
+                  {
+                    width: `${Math.max(0, Math.min(100, percentComplete || 0))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text
+              style={{
+                marginTop: 12,
+                color: "#FF6B54",
+                fontSize: 16,
+                fontWeight: "600",
+              }}
+            >
+              {Math.round(percentComplete || 0)}%
+            </Text>
           </View>
-          <Text style={{ marginTop: 6, color: "#6B7280" }}>
-            {Math.round(percentComplete || 0)}%
-          </Text>
-          <TouchableOpacity style={styles.resetButton} onPress={reset}>
+          <TouchableOpacity
+            style={[styles.resetButton, { marginTop: 24 }]}
+            onPress={reset}
+          >
             <Text style={styles.resetButtonText}>Start Over</Text>
           </TouchableOpacity>
         </View>
@@ -962,7 +998,7 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
                 <Text style={styles.copiedText}>Copied to clipboard!</Text>
               )}
               <TouchableOpacity onPress={handleCopyEvaluation}>
-                <Ionicons name="copy-outline" size={30} color="#007AFF" />
+                <Ionicons name="copy-outline" size={28} color="#FF6B54" />
               </TouchableOpacity>
             </View>
           </View>
@@ -978,7 +1014,7 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
                       { transform: [{ rotate: spin }] },
                     ]}
                   >
-                    <Ionicons name="refresh" size={24} color="#007AFF" />
+                    <Ionicons name="refresh" size={24} color="#FF6B54" />
                   </Animated.View>
                   <Text style={styles.loadingText}>Loading evaluation...</Text>
                 </View>
@@ -1014,7 +1050,7 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
                 onPress={handleCopyMetadata}
                 style={{ marginRight: 8 }}
               >
-                <Ionicons name="copy-outline" size={30} color="#007AFF" />
+                <Ionicons name="copy-outline" size={28} color="#FF6B54" />
               </TouchableOpacity>
               <Ionicons
                 name={
@@ -1022,8 +1058,8 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
                     ? "chevron-up-outline"
                     : "chevron-down-outline"
                 }
-                size={30}
-                color="#3C3C43"
+                size={26}
+                color="#6B7280"
               />
             </View>
           </TouchableOpacity>
@@ -1093,7 +1129,7 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
                         { transform: [{ rotate: spin }] },
                       ]}
                     >
-                      <Ionicons name="refresh" size={20} color="#007AFF" />
+                      <Ionicons name="refresh" size={20} color="#FF6B54" />
                     </Animated.View>
                     <Text style={[styles.loadingText, { fontSize: 14 }]}>
                       Loading evaluation metadata...
@@ -1146,164 +1182,217 @@ Output tokens: ${metadata?.output_tokens ?? "Not provided"}`
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1, backgroundColor: "#F2F2F7" },
+  wrapper: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
   container: {
-    padding: 15,
+    padding: 20,
   },
   blockContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#E5E5EA",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 16,
   },
   blockHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 16,
   },
   blockTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1A1A1A",
   },
   rightActions: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
   copiedText: {
-    color: "#34C759",
-    marginRight: 10,
+    color: "#22C55E",
+    marginRight: 8,
     fontSize: 14,
+    fontWeight: "500",
   },
   iconButton: {
     marginLeft: 12,
   },
-  h1: { fontSize: 26, fontWeight: "bold", marginBottom: 15 },
-  h2: { fontSize: 20, fontWeight: "600", marginTop: 15, marginBottom: 8 },
-  h3: { fontSize: 18, fontWeight: "600", marginTop: 12, marginBottom: 6 },
-  bodyText: { fontSize: 16, lineHeight: 24, color: "#3C3C43", marginBottom: 5 },
+  h1: {
+    fontSize: 28,
+    fontWeight: "700",
+    marginBottom: 16,
+    color: "#1A1A1A",
+  },
+  h2: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 20,
+    marginBottom: 10,
+    color: "#1A1A1A",
+  },
+  h3: {
+    fontSize: 17,
+    fontWeight: "600",
+    marginTop: 16,
+    marginBottom: 8,
+    color: "#374151",
+  },
+  bodyText: {
+    fontSize: 16,
+    lineHeight: 26,
+    color: "#4B5563",
+    marginBottom: 6,
+  },
   bulletItem: {
     fontSize: 16,
-    lineHeight: 24,
-    color: "#3C3C43",
-    marginLeft: 10,
+    lineHeight: 26,
+    color: "#4B5563",
+    marginLeft: 12,
   },
-  boldText: { fontWeight: "bold", fontSize: 14, paddingBottom: 3 },
+  boldText: {
+    fontWeight: "600",
+    fontSize: 15,
+    paddingBottom: 4,
+    color: "#1A1A1A",
+  },
   divider: {
     height: 1,
-    backgroundColor: "#E5E5EA",
-    marginVertical: 15,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 12,
   },
-  analystContainer: { marginBottom: 15 },
-  analystName: { fontSize: 16, fontWeight: "bold", marginBottom: 5 },
+  analystContainer: { marginBottom: 18 },
+  analystName: {
+    fontSize: 17,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#1A1A1A",
+  },
   questionContainer: {
-    marginLeft: 10,
-    marginBottom: 10,
-    paddingLeft: 5,
-    borderLeftWidth: 2,
-    borderLeftColor: "#E5E5EA",
+    marginLeft: 12,
+    marginBottom: 12,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#FF6B54",
   },
   metadataSection: {
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 10,
+    marginBottom: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
   },
   metadataDetail: {
     fontSize: 15,
-    lineHeight: 22,
-    color: "#3C3C43",
-    marginLeft: 10,
+    lineHeight: 24,
+    color: "#4B5563",
+    marginLeft: 8,
   },
   metadataNested: {
     fontSize: 15,
-    lineHeight: 22,
-    color: "#555555",
+    lineHeight: 24,
+    color: "#6B7280",
     marginLeft: 20,
   },
   footer: {
-    padding: 20,
+    padding: 24,
+    paddingBottom: 36,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
-    borderTopColor: "#E5E5EA",
+    borderTopColor: "#F3F4F6",
     alignItems: "center",
   },
   resetButton: {
-    backgroundColor: "#007AFF",
-    borderRadius: 12,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
+    backgroundColor: "#FF6B54",
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     width: "100%",
     alignItems: "center",
   },
-  resetButtonText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600" },
+  resetButtonText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
+  },
   progressBarOuter: {
-    height: 10,
+    height: 8,
     width: "100%",
-    backgroundColor: "#EEE",
-    borderRadius: 6,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
     overflow: "hidden",
-    marginTop: 4,
+    marginTop: 6,
   },
   progressBarInner: {
-    height: 10,
-    backgroundColor: "#007AFF",
+    height: 8,
+    backgroundColor: "#FF6B54",
+    borderRadius: 4,
   },
   warningBanner: {
-    backgroundColor: "#FFF8E1",
+    backgroundColor: "rgba(245, 158, 11, 0.1)",
     borderColor: "#F59E0B",
     borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 16,
   },
   warningText: {
-    color: "#92400E",
-    fontSize: 14,
+    color: "#B45309",
+    fontSize: 15,
+    fontWeight: "500",
   },
   // Table Styles
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F2F2F7",
-    padding: 8,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    backgroundColor: "#F3F4F6",
+    padding: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   tableHeaderCell: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#000000",
+    color: "#1A1A1A",
   },
   tableRow: {
     flexDirection: "row",
-    padding: 8,
+    padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5EA",
+    borderBottomColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
   },
   tableCell: {
     fontSize: 14,
-    color: "#3C3C43",
+    color: "#4B5563",
   },
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: 24,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
   },
   loadingSpinner: {
-    marginRight: 10,
+    marginRight: 12,
   },
   loadingText: {
     fontSize: 16,
-    color: "#666",
+    color: "#6B7280",
+    fontWeight: "500",
   },
   errorContainer: {
-    padding: 20,
+    padding: 24,
     alignItems: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
+    borderRadius: 14,
   },
   errorText: {
     fontSize: 16,
-    color: "#FF3B30",
+    color: "#EF4444",
+    fontWeight: "500",
   },
 })
 

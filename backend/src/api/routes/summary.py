@@ -36,6 +36,7 @@ async def get_summary(job_id: str):
         })
 
     # Load partial outputs if present
+    #TODO: [Code efficiency] Now it's re-fetching the already rendered outputs.Should avoid re-checking the parts that was already fetched by frontend. 
     outputs: Dict[str, Any] = {}
     try:
         qa_path = os.path.join(job_dir, "q_a_summary.json")

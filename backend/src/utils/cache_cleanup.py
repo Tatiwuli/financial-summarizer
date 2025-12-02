@@ -5,11 +5,11 @@ import threading
 import logging
 from datetime import datetime, timedelta
 
-from src.services.job_utils import (
+from src.utils.job_utils import (
     _get_lock_for_job,
     _job_last_updated,
     _job_is_terminal,
-    _read_job_index,
+    _read_json_file,
     _write_job_index
 )
 from src.config.constants import RETENTION_DAYS, FORCE_CLEANUP_DAYS, CLEANUP_INTERVAL_SECONDS, CACHE_DIR
@@ -76,7 +76,7 @@ def _run_cleanup_cycle():
                 logger.warning(
                     "Cache cleanup: failed to remove %s: %s", job_dir, e)
 
-        idx = _read_job_index(_JOB_INDEX_PATH)
+        idx = _read_json_file(_JOB_INDEX_PATH)
         if not isinstance(idx, dict):
             idx = {}
         original_count = len(idx)

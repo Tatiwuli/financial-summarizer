@@ -1,5 +1,3 @@
-# src/services/summary_workflow.py
-
 import json
 import logging
 import os
@@ -7,7 +5,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from typing import Any, Dict, Optional, Tuple
-
 from pydantic import ValidationError
 
 from src.config.constants import CACHE_DIR
@@ -54,20 +51,20 @@ def run_summary_workflow_from_saved_transcripts(
     total_time_sec = 0.0
 
     try:
-        # 1. Load Transcripts
+        #Fetch transcripts from local cache
         qa_transcript, presentation_transcript = _load_transcripts(
             transcript_name)
 
-        # 2. Get Prompt Config
+        #Configuring prompt
         prompt_config = get_prompt_config(
             call_type, summary_length, answer_format)
 
         # Early cancellation check
         if cancel_event and cancel_event.is_set():
             job_manager.fail_job("cancelled", "User cancelled before start")
-            return _empty_result(call_type)
+            return {"title": "Untitled", "call_type": call_type, "blocks": blocks or []}
 
-        # 3. Execute Q&A Summary Stage
+        # Summarize Q&A
         qa_block, qa_summary_text, summary_metadata, time_taken = _execute_qa_summary(
             qa_transcript=qa_transcript,
             prompt_config=prompt_config,
@@ -85,12 +82,12 @@ def run_summary_workflow_from_saved_transcripts(
             job_manager.set_stage_status(Stage.JUDGE, Status.FAILED)
             job_manager.fail_job(
                 "cancelled", "User cancelled after Q&A summary")
-            return _empty_result(call_type, blocks)
+            return {"title": "Untitled", "call_type": call_type, "blocks": blocks or []}
 
-        # 4. Handle Rate Limiting
+        # exponential backoff if reach rate limit
         _apply_exponential_backoff(summary_metadata.get("remaining_tokens"))
 
-        # 5. Execute Overview and Judge Stages in Parallel
+        # Call Overview and Judge Stages in Parallel
         parallel_blocks, parallel_time_sec = _execute_parallel_stages(
             qa_transcript=qa_transcript,
             presentation_transcript=presentation_transcript,
@@ -106,9 +103,9 @@ def run_summary_workflow_from_saved_transcripts(
     except SummaryWorkflowError as e:
         logger.error(f"Workflow failed with code {e.code}: {e.message}")
         job_manager.fail_job(e.code, e.message)
-        return _empty_result(call_type, blocks)
+        return {"title": "Untitled", "call_type": call_type, "blocks": blocks or []}
 
-    # 6. Finalize Job
+    # Mark job complete
     if job_manager.is_job_complete():
         job_manager.update_status({
             "current_stage": "completed",
@@ -180,7 +177,7 @@ def _execute_qa_summary(**kwargs) -> Tuple[Dict, str, Dict, float]:
         qa_summary_text = qa_resp.get(
             "summary", {}).get("text", "Empty summary")
 
-        if job_manager.is_managed:
+        if job_manager.has_job_directory:
             payload = {"metadata": _format_for_json(
                 summary_metadata), "data": qa_summary_obj.model_dump()}
             JobStatusManager.write_json_atomic(os.path.join(
@@ -277,7 +274,7 @@ def _run_overview_task(**kwargs) -> Tuple[Optional[Dict], float]:
     if ov_obj:
         block = {"type": "overview", "metadata": metadata,
                  "data": ov_obj.model_dump()}
-        if job_manager.is_managed:
+        if job_manager.has_job_directory:
             payload = {"metadata": _format_for_json(
                 metadata), "data": ov_obj.model_dump()}
             JobStatusManager.write_json_atomic(os.path.join(
@@ -310,7 +307,7 @@ def _run_judge_task(**kwargs) -> Tuple[Optional[Dict], float]:
 
         block = {"type": "judge", "metadata": metadata,
                  "data": judge_obj.model_dump()}
-        if job_manager.is_managed:
+        if job_manager.has_job_directory:
             payload = {"metadata": _format_for_json(
                 metadata), "data": judge_obj.model_dump()}
             JobStatusManager.write_json_atomic(os.path.join(
@@ -323,11 +320,6 @@ def _run_judge_task(**kwargs) -> Tuple[Optional[Dict], float]:
         raise SummaryWorkflowError("llm_judge_error", str(e))
 
 # --- Utility Functions ---
-
-
-def _empty_result(call_type: str, blocks: Optional[list] = None) -> Dict[str, Any]:
-    """Returns a minimal, consistent result payload for early exits."""
-    return {"title": "Untitled", "call_type": call_type, "blocks": blocks or []}
 
 
 def _apply_exponential_backoff(remaining_tokens: Optional[int], threshold: int = 40000):

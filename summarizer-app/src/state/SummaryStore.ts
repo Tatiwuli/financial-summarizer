@@ -13,11 +13,11 @@ import {
   SummaryResult,
 } from "../types"
 
-// Remove duplicate interface - using imported SummaryState from types
 
-// ------- CODES FOR PERSISTING FRONTEND STATE WHEN USER REFRESHES THE PAGE -------
+
 // Web-only persistence using localStorage
 const STORAGE_KEY = "kapitalo_summary_state_v2"
+
 
 type PersistedState = Pick<
   SummaryState,
@@ -150,47 +150,47 @@ export const useSummaryStore = create<SummaryState>((set) => {
       console.log("[SummaryStore] currentCallType: ", callType)
 
       try {
-        // Mandatory health check . Returns error if backend is not available
-        try {
-          await healthCheck(
-            2000,
-            () => {
-              // first retry hook: show a friendly message while we attempt retries
-              set({
-                status: "error",
-                error:
-                  "Great things take time! The current server is running on free tier.We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready."
-                  ,
-                messageType: "info",
-                isWaitingForServer: true,
-                result: null,
-              })
-            },
-            () => {
-              // success hook: show ready message ONLY if user was waiting for server
-              const currentState = useSummaryStore.getState()
-              if (currentState.isWaitingForServer) {
-                set({
-                  status: "error",
-                  error:
-                    "🎉 Ready to go! The server is back online. Click 'Generate Summary' again to continue.",
-                  messageType: "success",
-                  isWaitingForServer: false, // Clear the waiting flag
-                  result: null,
-                })
-              }
-            }
-          )
-        } catch (_e) {
-          set({
-            status: "error",
-            error:
-              "[Health Check] Backend is not available. Refresh the page and try again. If the problem persists, check the backend logs on Render.",
-            result: null,
-          })
-          clearPersistedState()
-          return
-        }
+        // // Mandatory health check . Returns error if backend is not available
+        // try {
+        //   await healthCheck(
+        //     2000,
+        //     () => {
+        //       // first retry hook: show a friendly message while we attempt retries
+        //       set({
+        //         status: "error",
+        //         error:
+        //           "Great things take time! The current server is running on free tier.We're waking up the server for your best experience. This can take ~50 seconds. We will notify you once the server is ready."
+            //       ,
+            //     messageType: "info",
+            //     isWaitingForServer: true,
+            //     result: null,
+            //   })
+            // },
+            // () => {
+            //   // success hook: show ready message ONLY if user was waiting for server
+            //   const currentState = useSummaryStore.getState()
+            //   if (currentState.isWaitingForServer) {
+          //       set({
+          //         status: "error",
+          //         error:
+          //           "🎉 Ready to go! The server is back online. Click 'Generate Summary' again to continue.",
+          //         messageType: "success",
+          //         isWaitingForServer: false, // Clear the waiting flag
+          //         result: null,
+          //       })
+          //     }
+          //   }
+          // )
+        // } catch (_e) {
+        //   set({
+        //     status: "error",
+        //     error:
+        //       "[Health Check] Backend is not available. Refresh the page and try again. If the problem persists, check the backend logs on Render.",
+        //     result: null,
+        //   })
+        //   clearPersistedState()
+        //   return
+        // }
 
         // Validate file
         console.log("[SummaryStore]  await validatePdf")
@@ -234,7 +234,7 @@ export const useSummaryStore = create<SummaryState>((set) => {
           },
           jobId,
           transcriptName,
-          stage: "File Validated! Starting summary",
+          stage: "validated file",
           percentComplete: 10, // update the progress bar
         }) // save the progress in the browser
         savePersistedState({
