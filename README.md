@@ -2,9 +2,20 @@
 
 **Note: this repository is a demo of the financial summarizer web app built for my internship at Kapitalo Investimentos**
 
-**Check out the web app [here](https://financial-summarizer-yvbs.vercel.app)**
+🔗**Check out the web app [here](https://financial-summarizer-yvbs.vercel.app)**
 
 Generates structured earnings/conference call summaries from uploaded PDFs. Frontend (React Native + TypeScript) collects inputs and renders results. Backend (FastAPI + Python) validates PDFs, runs LLM workflows, persists job state to a local cache, and exposes REST APIs.
+
+## App Overview
+
+### Upload PDF Page
+![Upload PDF Page](upload_pdf.gif)
+
+### Summary Page
+![Summary Page](report.gif)
+
+### Summary Page and Additional Features
+![Summary Page and Additional Features](report_features.gif)
 
 ### Monorepo Layout
 
